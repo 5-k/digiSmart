@@ -57,46 +57,44 @@ def checkIfValidSource(sourceNameVal):
     return False
 
 def getNestedLevel(attribute):
-    return math.ceil(attribute.count('/') /2)
+    return math.ceil(attribute.count('/') /2) 
+
+def parseRecursive(keyModel, valueModels, secondLevelKey):
+    for valueModel in valueModels:  
+        if valueModel["uri"] in keyModel.completeAttributeUri:
+            obj = valueModel["value"]
+            if(secondLevelKey in obj):
+                valueDataModel = obj[secondLevelKey]
+                for value in valueDataModel:  
+                    if value["uri"] == keyModel.completeAttributeUri:
+                        obj = value["value"]
+                        return obj
+            else:
+                return obj
+    return None 
 
 def recursiveParser(keyModel, valueModels, currentKey, currentLevel):
     if currentLevel == 1 and currentKey in list_RequiredField_For_Single_Nested_Data:
-        for valueModel in valueModels:
-            if valueModel["uri"] == keyModel.completeAttributeUri:
-                obj = valueModel["value"]
-                return obj
+        return parseRecursive(keyModel, valueModels, 'InvalidKey')
     
     if currentLevel == 2 and currentKey in list_RequiredField_For_Double_Nested_Data:
+        
         if currentKey == 'Email':
-            for valueModel in valueModels:  
-                if valueModel["uri"] in keyModel.completeAttributeUri:
-                    emailModels = valueModel['value']['Email']
-                    for emailModel in emailModels:  
-                        if emailModel["uri"] == keyModel.completeAttributeUri:
-                            obj = valueModel["value"]
+            return parseRecursive(keyModel, valueModels, 'Email') 
         
         elif currentKey == 'RegulatoryAction':
-            for valueModel in valueModels:  
-                if valueModel["uri"] in keyModel.completeAttributeUri: 
-                    regulatoryActionModels = valueModel['value']['Flag']
-                    for regulatoryActionModel in regulatoryActionModels:  
-                        if regulatoryActionModel["uri"] == keyModel.completeAttributeUri:
-                            obj = valueModel["value"]
+            return parseRecursive(keyModel, valueModels, 'Flag')  
         
         elif currentKey == 'Phone':
-            for valueModel in valueModels:  
-                if valueModel["uri"] in keyModel.completeAttributeUri:
-                    phoneModels = valueModel['value']['Number']
-                    for phoneModel in phoneModels:  
-                        if phoneModel["uri"] == keyModel.completeAttributeUri:
-                            obj = valueModel["value"]
+            return parseRecursive(keyModel, valueModels, 'Number')   
+
         else:
-                return None
+            return None
          
     return None 
     
 
-def dataParser(i, fileName, crossWalkPath):
+def parseAndPopulateData(i, fileName, crossWalkPath):
     crossWalkUri = crossWalkPath['uri']
     crossWalkValue = crossWalkPath['value']
     createDate = crossWalkPath['createDate']
@@ -148,7 +146,7 @@ for crossWalkPath in data['crosswalks']:
                     attribKey = attribute[attributeStartKeyIndex + len(key) :]
                     obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey, crossWalkPath['uri'], crossWalkPath['value'], crossWalkPath['createDate'])
                     list_SimpleModels.append(obj)
-                dataParser(i, fileName, crossWalkPath)
+                parseAndPopulateData(i, fileName, crossWalkPath)
                 list_SimpleModels.clear()      
             else:
                 print("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
