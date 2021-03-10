@@ -4,22 +4,21 @@
 #DESCRIPTION: This script will convert the HCP JSON file into csv file with required attributes and logic for CODS Ruleset
 #Version: 1.0 by TCS - Initial version
 ########################################################################################################################
-import sys
+
 import json
-import csv
-import time
 import math
 
-timestr = time.strftime("%Y%m%d%H%M%S")
-# GCCEPH_INBOUND="/mkt/ephub/srcfiles"
 GCCEPH_INBOUND="C:/Users/pramishr/Desktop/data"
-#GCCEPH_LOG="/mkt/crml4/log"
+
 json_file_path = GCCEPH_INBOUND + "/POC_HCP_INPUT_FILE_23.json"
-f = open(json_file_path) 
+f = open(json_file_path, encoding="UTF-8") 
+newData = "[" + f.read() +"]" 
 
 output_type='json'
+
+#validCrossWalks= ["CODS","MDU","CTLN"]
 validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
-#validCrossWalks= ["CODS"]
+
 list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
 list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
 list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
@@ -30,8 +29,8 @@ list_SimpleModels = []
 # returns JSON object as  
 # a dictionary 
 
-data = json.load(f) 
-i = 0
+allData = json.loads(newData)  
+output_data = []
 
 class SimpleJsonStruct:
     crossWalkUri: str
@@ -75,9 +74,12 @@ def parseRecursive(keyModel, valueModels, secondLevelKey):
 
 def recursiveParser(keyModel, valueModels, currentKey, currentLevel):
     if currentLevel == 1 and currentKey in list_RequiredField_For_Single_Nested_Data:
-        return parseRecursive(keyModel, valueModels, 'InvalidKey')
+        for valueModel in valueModels:
+            if valueModel["uri"] == keyModel.completeAttributeUri:
+                obj = valueModel["value"]
+                return obj
     
-    if currentLevel == 2 and currentKey in list_RequiredField_For_Double_Nested_Data:
+    elif currentLevel == 2 and currentKey in list_RequiredField_For_Double_Nested_Data:
         
         if currentKey == 'Email':
             return parseRecursive(keyModel, valueModels, 'Email') 
@@ -90,11 +92,14 @@ def recursiveParser(keyModel, valueModels, currentKey, currentLevel):
 
         else:
             return None
+    elif currentLevel > 2:
+        print("Error: Found Level " + str(currentLevel) + " attrbute. Unhandled Condition, Attribute Skipped")
+ 
          
     return None 
     
 
-def parseAndPopulateData(i, fileName, crossWalkPath):
+def parseAndPopulateData(data, crossWalkPath):
     crossWalkUri = crossWalkPath['uri']
     crossWalkValue = crossWalkPath['value']
     createDate = crossWalkPath['createDate']
@@ -130,36 +135,45 @@ def parseAndPopulateData(i, fileName, crossWalkPath):
     finalData['EntityId'] = entityId
 
     if(finalData and flag):
-        with open(fileName,'w') as outfile:
-            json.dump(finalData, outfile)
+        output_data.append(finalData)
+    
 
-
-for crossWalkPath in data['crosswalks']: 
-    i = i + 1
-    if "sourceTable" in crossWalkPath:
-        if(checkIfValidSource(crossWalkPath["sourceTable"])):
-            fileName= crossWalkPath["sourceTable"] + "_" + crossWalkPath["value"] + "." + output_type
-            if "attributes" in crossWalkPath and bool(crossWalkPath["attributes"]):
-                for attribute in crossWalkPath['attributes']:  
-                    key = '/attributes/'
-                    attributeStartKeyIndex = attribute.index(key)
-                    attribKey = attribute[attributeStartKeyIndex + len(key) :]
-                    obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey, crossWalkPath['uri'], crossWalkPath['value'], crossWalkPath['createDate'])
-                    list_SimpleModels.append(obj)
-                parseAndPopulateData(i, fileName, crossWalkPath)
-                list_SimpleModels.clear()      
+def parseEntity(entityData):
+    
+    for crossWalkPath in entityData['crosswalks']:  
+        if "sourceTable" in crossWalkPath:
+            if(checkIfValidSource(crossWalkPath["sourceTable"])):
+                
+                if "attributes" in crossWalkPath and bool(crossWalkPath["attributes"]):
+                    
+                    for attribute in crossWalkPath['attributes']:
+                        key = '/attributes/'
+                        attributeStartKeyIndex = attribute.index(key)
+                        attribKey = attribute[attributeStartKeyIndex + len(key) :]
+                        obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey, crossWalkPath['uri'], crossWalkPath['value'], crossWalkPath['createDate'])
+                        list_SimpleModels.append(obj)
+                    parseAndPopulateData(entityData, crossWalkPath)
+                    list_SimpleModels.clear()
+                else:
+                    print("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
             else:
-                print("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
+                print("Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
         else:
-            print("Warning: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
-    else:
-        print("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+            print("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+    
+    
+    
             
+    
+                
 
+for entity in allData:
+    parseEntity(entity)
 
-
-
-
+fileName= "combined" + "." + output_type
+with open(fileName,'w') as outfile:
+    json.dump(output_data, outfile)
+    list_SimpleModels.clear()  
 
 # Closing file 
 f.close() 
