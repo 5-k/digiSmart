@@ -196,13 +196,23 @@ def parseEntity(entityData):
 
 #Application Main
 # Load All Data and for eachData Run the Function
-for entity in allData[0]:
+for entity in allData:
     parseEntity(entity)
 
 #Post Processing, Dump all data to json
-fileName= "data_de_profiled_simplefied_json" + "." + output_type
-with open(fileName,'w') as outfile:
-    json.dump(output_data, outfile)
+fileName= POC_INBOUND + "/data_de_profiled_simplefied_json" + "." + output_type
+
+try:
+    os.remove(fileName)
+except OSError:
+    pass
+
+with open(fileName,'a') as outfile:
+    for data in output_data:
+        json.dump(data, outfile)
+        outfile.write("\n")
+        #outfile.write(data)a
+        #json.dump(output_data, outfile)
     list_SimpleModels.clear()  
 
 # Closing file 
