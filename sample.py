@@ -1,4 +1,3 @@
-  
 ########################################################################################################################
 #Script Name: data_de__profiler_source_simplefied_json.py
 #Developer Name: Aditya Singh
@@ -12,20 +11,20 @@
 import json
 import math
 import os
-#import boto3
+import boto3
 import time 
 
 #There are the prefixes of valid sources we want to read from input json. 
-#validCrossWalks= ["CODS","MDU","CTLN"]
-validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+validCrossWalks= ["CODS"]
+#validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
 
 #Required Fields in Output Json
 list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
 list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
 list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
 list_RequiredField_Custom=["EntityId"]
-logDataToFile = True
-is_local_run = True
+logDataToFile = False
+is_local_run = False
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -176,7 +175,7 @@ def parseEntity(entityData, output_data, list_SimpleModels, logFileName):
                         key = '/attributes/'
                         attributeStartKeyIndex = attribute.index(key)
                         attribKey = attribute[attributeStartKeyIndex + len(key) :]
-                        obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey)
+                        obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey)                          
                         list_SimpleModels.append(obj)
                     parseAndPopulateData(entityData, crossWalkPath, output_data, list_SimpleModels, logFileName)
                     list_SimpleModels.clear()
@@ -190,7 +189,7 @@ def parseEntity(entityData, output_data, list_SimpleModels, logFileName):
 def deleteFileIfExists(fileNameToDelete):
     try:    
         os.remove(fileNameToDelete)
-    except OSError:
+    except:
         pass 
 
 def main():
@@ -199,16 +198,18 @@ def main():
     lines = ''
 
     if(is_local_run):
-        POC_INBOUND = 'C:/Users/pramishr/Desktop/data'
-        file=POC_INBOUND+ '/POC_HCP_INPUT_FILE_23.json'
+        POC_INBOUND = 'H:/python'
+        file=POC_INBOUND+ '/sample.json'
         f = open(file, encoding = "UTF-8") 
         lines = f.read()
     else:
         print("")
-        #POC_INBOUND = 's3://lly-future-state-arch-poc-dev/input_data'
-        #file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/HCP_Traverse_3Load.json')
+        s3=boto3.client('s3')
+        POC_INBOUND = 's3://lly-future-state-arch-poc-dev/input_data'
+        file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/sample.json')
+        f = file['Body'].read().decode('UTF-8')
         #f = open(file, encoding = "UTF-8") 
-        #lines = f.read()
+        lines = f
    
     #The source file is assumed to be an array of json but the format does not enclose in array format
     #Hence PrePending and Pospending array brackets to convert to valid Json
@@ -239,11 +240,28 @@ def main():
         parseEntity(entity, output_data, list_SimpleModels, logFileName)  
 
     with open(outputFileName,'a') as outfile:
-        for data in output_data:
-            json.dump(data, outfile)
-            outfile.write("\n")
-            #outfile.write(data)a
-            #json.dump(output_data, outfile)
+        if(is_local_run):
+            for data in output_data:
+                json.dump(data, outfile)
+                outfile.write("\n")
+                #outfile.write(data)a
+                #json.dump(output_data, outfile)
+        else:
+            s3=boto3.client('s3')
+            for data in output_data:
+                s3.put_object(
+                    Body = str(json.dump(data, outfile)),
+                    Bucket='lly-future-state-arch-poc-dev',
+                    Key='input_data/data_de_profiled_simplefied_json.json'
+                )
+                s3.put_object(
+                    Body = outfile.write("\n"),
+                    Bucket='lly-future-state-arch-poc-dev',
+                    Key='input_data/data_de_profiled_simplefied_json.json'
+                )
+                
+                
+
         list_SimpleModels.clear()  
 
     # Closing file 
