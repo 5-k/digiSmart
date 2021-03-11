@@ -1,1 +1,206 @@
-ss
+ "Email": [
+ {
+                "label": "johnbdavies@gmail.com",
+                "value": {
+                    "Type": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Type",
+                            "ov": true,
+                            "value": "WORK EMAIL",
+                            "lookupCode": "WORK EMAIL",
+                            "lookupRawValue": "WORK EMAIL",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/Type/30lAlUacg"
+                        }
+                    ],
+                    "Rank": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Rank",
+                            "ov": true,
+                            "value": "1",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/Rank/30lAlUnPS"
+                        }
+                    ],
+                    "Email": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Email",
+                            "ov": true,
+                            "value": "johnbdavies@gmail.com",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/Email/30lAlUesw"
+                        }
+                    ],
+                    "DataValidationStatusCode": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/DataValidationStatusCode",
+                            "ov": true,
+                            "value": "VALIDATED",
+                            "lookupCode": "VLDTD",
+                            "lookupRawValue": "VLDTD",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/DataValidationStatusCode/30lAlUWMQ"
+                        }
+                    ],
+                    "EffectiveStartDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveStartDate",
+                            "ov": true,
+                            "value": "2020-01-14",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/EffectiveStartDate/30lAlUvvy"
+                        }
+                    ],
+                    "EffectiveEndDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveEndDate",
+                            "ov": true,
+                            "value": "2020-03-16",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/EffectiveEndDate/30lAlUj9C"
+                        }
+                    ],
+                    "ValidationReasonCode": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/ValidationReasonCode",
+                            "ov": true,
+                            "value": "Valid",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A/ValidationReasonCode/30lAlUrfi"
+                        }
+                    ]
+                },
+                "ov": true,
+                "uri": "entities/abjP7bM/attributes/Email/30lAlUS6A"
+            }, {
+                "label": "VRS@VRSSURGERY.COM",
+                "value": {
+                    "Type": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Type",
+                            "ov": true,
+                            "value": "WORK EMAIL",
+                            "lookupCode": "WORK EMAIL",
+                            "lookupRawValue": "WORK EMAIL",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/Type/30lAlU2Wc"
+                        }
+                    ],
+                    "Rank": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Rank",
+                            "ov": true,
+                            "value": "1",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/Rank/30lAlUFJO"
+                        }
+                    ],
+                    "Email": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Email",
+                            "ov": true,
+                            "value": "VRS@VRSSURGERY.COM",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/Email/30lAlU6ms"
+                        }
+                    ],
+                    "DataValidationStatusCode": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/DataValidationStatusCode",
+                            "ov": true,
+                            "value": "VALIDATED",
+                            "lookupCode": "VLDTD",
+                            "lookupRawValue": "VLDTD",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/DataValidationStatusCode/30lAlTyGM"
+                        }
+                    ],
+                    "EffectiveStartDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveStartDate",
+                            "ov": true,
+                            "value": "2005-06-15",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/EffectiveStartDate/30lAlUNpu"
+                        }
+                    ],
+                    "EffectiveEndDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveEndDate",
+                            "ov": true,
+                            "value": "2015-12-24",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/EffectiveEndDate/30lAlUB38"
+                        }
+                    ],
+                    "ValidationReasonCode": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/ValidationReasonCode",
+                            "ov": true,
+                            "value": "Valid",
+                            "uri": "entities/abjP7bM/attributes/Email/30lAlTu06/ValidationReasonCode/30lAlUJZe"
+                        }
+                    ]
+                },
+                "ov": true,
+                "uri": "entities/abjP7bM/attributes/Email/30lAlTu06"
+            }, {
+                "label": "johnbdavies@gmail.com",
+                "value": {
+                    "Type": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Type",
+                            "ov": true,
+                            "value": "EMAIL",
+                            "lookupCode": "EMAIL",
+                            "lookupRawValue": "EMAIL",
+                            "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL/Type/KEwNfZEr"
+                        }
+                    ],
+                    "Email": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Email",
+                            "ov": true,
+                            "value": "johnbdavies@gmail.com",
+                            "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL/Email/KEwNfdV7"
+                        }
+                    ],
+                    "GCCPChannelId": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/GCCPChannelId",
+                            "ov": true,
+                            "value": "5102588",
+                            "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL/GCCPChannelId/KEwNfUyb"
+                        }
+                    ],
+                    "EffectiveStartDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveStartDate",
+                            "ov": true,
+                            "value": "2020-01-14",
+                            "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL/EffectiveStartDate/KEwNfm1d"
+                        }
+                    ],
+                    "EffectiveEndDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveEndDate",
+                            "ov": true,
+                            "value": "9999-12-31",
+                            "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL/EffectiveEndDate/KEwNfhlN"
+                        }
+                    ]
+                },
+                "ov": true,
+                "uri": "entities/abjP7bM/attributes/Email/KEwNfQiL"
+            }, {
+                "label": "VRS@VRSSURGERY.COM",
+                "value": {
+                    "Type": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Type",
+                            "ov": true,
+                            "value": "EMAIL",
+                            "lookupCode": "EMAIL",
+                            "lookupRawValue": "EMAIL",
+                            "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A/Type/yr5RnuYg"
+                        }
+                    ],
+                    "Email": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/Email",
+                            "ov": true,
+                            "value": "VRS@VRSSURGERY.COM",
+                            "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A/Email/yr5Rnyow"
+                        }
+                    ],
+                    "GCCPChannelId": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/GCCPChannelId",
+                            "ov": true,
+                            "value": "3000961",
+                            "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A/GCCPChannelId/yr5RnqIQ"
+                        }
+                    ],
+                    "EffectiveStartDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveStartDate",
+                            "ov": true,
+                            "value": "2015-03-18",
+                            "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A/EffectiveStartDate/yr5Ro7LS"
+                        }
+                    ],
+                    "EffectiveEndDate": [{
+                            "type": "configuration/entityTypes/HCP/attributes/Email/attributes/EffectiveEndDate",
+                            "ov": true,
+                            "value": "9999-12-31",
+                            "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A/EffectiveEndDate/yr5Ro35C"
+                        }
+                    ]
+                },
+                "ov": true,
+                "uri": "entities/abjP7bM/attributes/Email/yr5Rnm2A"
+            }
