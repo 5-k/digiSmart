@@ -12,7 +12,7 @@
 import json
 import math
 import os
-import boto3
+#import boto3
 import time 
 
 #There are the prefixes of valid sources we want to read from input json. 
@@ -24,10 +24,8 @@ list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","Effective
 list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
 list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
 list_RequiredField_Custom=["EntityId"]
-list_SimpleModels = []
-outputFileName = ""
-logFileName = ""
 logDataToFile = True
+is_local_run = True
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -40,7 +38,7 @@ class SimpleJsonStruct:
         self.completeAttributeUri = completeAttributeUri
         self.nestedLevel = nestedLevel
 
-def log(logData):
+def log(logFileName, logData):
     if(logDataToFile):
         with open(logFileName,'a') as outfile:
             outfile.write(logData) 
@@ -63,6 +61,8 @@ def secondLevelParser(keyModel, valueModels, secondLevelKey, keyToFetchForFirstL
     #Function Defined for Recursive Parsing. Currently Customized for 2 Levels but TODO: Generic Formatting
     #The FirstLevelKey and SecondLevelKey are always 'Value' But we are passing this from another function so that 
     #in custom cases where need something else like lookupcode in CC, we can do that as well
+    dataObject = ""
+
     for valueModel in valueModels:  
         if valueModel["uri"] in keyModel.completeAttributeUri:
             obj = valueModel[keyToFetchForFirstLevel]
@@ -71,12 +71,15 @@ def secondLevelParser(keyModel, valueModels, secondLevelKey, keyToFetchForFirstL
                 for value in valueDataModel:  
                     if value["uri"] == keyModel.completeAttributeUri:
                         obj = value[keyToFetchForSecondLevel]
-                        return obj
+                        if(len(dataObject) == 0):
+                            dataObject = dataObject + obj
+                        else:
+                            dataObject= "," + dataObject + obj 
             else:
                 return obj
-    return None 
+    return dataObject 
 
-def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch):
+def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch, logFileName):
     #This is the main Parser which is called for each KeyModel. 
     # KeyModel - An Object from the custom defined class which contains all attributes for one entity for one crosswalk
     # ValueModels - List Of Value for a specific Key
@@ -106,13 +109,13 @@ def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch)
         else:
             return None
     elif currentLevel > 2:
-        log("Error: Found Level more than 2 attrbute. Unhandled Condition, Attribute Skipped for key: " + currentKey)
-        log(currentLevel)
+        log(logFileName, "Error: Found Level more than 2 attrbute. Unhandled Condition, Attribute Skipped for key: " + currentKey)
+        log(logFileName, currentLevel)
  
          
     return None 
     
-def parseAndPopulateData(data, crossWalkPath, output_data):
+def parseAndPopulateData(data, crossWalkPath, output_data, list_SimpleModels,logFileName):
     #This function takes in the entire entity data and crosswalk(from the same enitityData)
     # Parses Each Objects created as per data struct and then Evaluates the Value for them to add to final Array
     crossWalkUri = crossWalkPath['uri']
@@ -130,11 +133,11 @@ def parseAndPopulateData(data, crossWalkPath, output_data):
 
             #CustomCode For Adding Extra Entity
             if(keyForUri == 'CountryCode'):
-                customObjValue = recursiveParser(model, valueModels, keyForUri, model.nestedLevel, 'lookupCode')
+                customObjValue = recursiveParser( model, valueModels, keyForUri, model.nestedLevel, 'lookupCode', logFileName)
                 finalData['CountryCodeValue']= (str(customObjValue))
 
-            objValue = recursiveParser(model, valueModels, keyForUri, model.nestedLevel, 'value')
-            if objValue: 
+            objValue = recursiveParser( model, valueModels, keyForUri, model.nestedLevel, 'value', logFileName)
+            if objValue and (len(objValue) > 0): 
                 flag=True 
                 finalData[keyForUri]= (str(objValue))
  
@@ -159,7 +162,7 @@ def parseAndPopulateData(data, crossWalkPath, output_data):
     if(finalData and flag):
         output_data.append(finalData)
     
-def parseEntity(entityData, output_data):
+def parseEntity(entityData, output_data, list_SimpleModels, logFileName):
     #For each element in EntityArray, We find the SourceTable , CrossWalks And Parses them to 
     # identify AttributeKey, NestedLevels, URI to match and creates an Object for each entity
     # Each such object is added to an array for later to be evaluated
@@ -175,14 +178,14 @@ def parseEntity(entityData, output_data):
                         attribKey = attribute[attributeStartKeyIndex + len(key) :]
                         obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey)
                         list_SimpleModels.append(obj)
-                    parseAndPopulateData(entityData, crossWalkPath, output_data)
+                    parseAndPopulateData(entityData, crossWalkPath, output_data, list_SimpleModels, logFileName)
                     list_SimpleModels.clear()
                 else:
-                    log("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
+                    log(logFileName, "Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
             else:
-                log("Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
+                log(logFileName, "Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
         else:
-            log("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+            log(logFileName, "Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
 
 def deleteFileIfExists(fileNameToDelete):
     try:    
@@ -191,23 +194,30 @@ def deleteFileIfExists(fileNameToDelete):
         pass 
 
 def main():
-    s3 = boto3.client('s3')
-    #Source Json File Path Defined Here
-    file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/HCP_Traverse_3Load.json')
-    f = open(file, encoding = "UTF-8") 
-    lines = f.read()
-    #lines = file['Body'].read().decode('utf-8')
     
+    POC_INBOUND = ''
+    lines = ''
+
+    if(is_local_run):
+        POC_INBOUND = 'C:/Users/pramishr/Desktop/data'
+        file=POC_INBOUND+ '/POC_HCP_INPUT_FILE_23.json'
+        f = open(file, encoding = "UTF-8") 
+        lines = f.read()
+    else:
+        print("")
+        #POC_INBOUND = 's3://lly-future-state-arch-poc-dev/input_data'
+        #file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/HCP_Traverse_3Load.json')
+        #f = open(file, encoding = "UTF-8") 
+        #lines = f.read()
+   
     #The source file is assumed to be an array of json but the format does not enclose in array format
     #Hence PrePending and Pospending array brackets to convert to valid Json
     new_lines = "[" + lines + "]"
     
     #Loading Data to Memory as Json
-    allData = json.loads(new_lines)
-
-    POC_INBOUND = 's3://lly-future-state-arch-poc-dev/input_data'
+    allData = json.loads(new_lines) 
     output_type='json'
-    ts = time.time() 
+    ts = str(time.time()) 
     logFileName = POC_INBOUND + "/logFile_" + ts + "." + "txt"
     
     #Post Processing, Dump all data to json
@@ -226,12 +236,7 @@ def main():
     #Application Main
     # Load All Data and for eachData Run the Function
     for entity in allData:
-        parseEntity(entity, output_data) 
-
-    try:
-        os.remove(outputFileName)
-    except OSError:
-        pass
+        parseEntity(entity, output_data, list_SimpleModels, logFileName)  
 
     with open(outputFileName,'a') as outfile:
         for data in output_data:
