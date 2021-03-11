@@ -1,3 +1,4 @@
+  
 ########################################################################################################################
 #Script Name: data_de__profiler_source_simplefied_json.py
 #Developer Name: Aditya Singh
@@ -10,44 +11,11 @@
 #Defining Imports
 import json
 import math
+import os
+import boto3
 
-#Source Json File Path Defined Here
-GCCEPH_INBOUND="H:/python"
-
-#Source File Name Defined Here
-json_file_path = GCCEPH_INBOUND + "/sample.json" 
-f = open(json_file_path, encoding="UTF-8") 
-
-#The source file is assumed to be an array of json but the format does not enclose in array format
-#Hence PrePending and Pospending array brackets to convert to valid Json
-newData = "[" + f.read() +"]" 
-
-#Output type Defined as Json. Can be CSV as well. Need to handle case in case we need csv data
-output_type='json'
-
-#There are the prefixes of valid sources we want to read from input json. 
-#validCrossWalks= ["CODS","MDU","CTLN"]
-validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
-
-#Required Fields in Output Json
-list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
-list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
-list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
-list_RequiredField_Custom=["EntityId"]
-
-#Simple ListOf Struct Data structure to hold information on crossWalks for Each Entity
-list_SimpleModels = []
-# returns JSON object as  
-# a dictionary 
-
-#Loading Data to Memory as Json
-allData = json.loads(newData)  
-
-#Initializing Output Array Empty
-output_data = []
-
-#Struct To Hold relevant Information for Each crosswalk in each Entity
 class SimpleJsonStruct:
+    #Struct To Hold relevant Information for Each crosswalk in each Entity
     completeAttributeUri : str
     nestedLevel: int
     trimmedAttributeUri: str
@@ -57,21 +25,21 @@ class SimpleJsonStruct:
         self.completeAttributeUri = completeAttributeUri
         self.nestedLevel = nestedLevel
  
-#Function To Check if the attribute Value Is present In Valid Source List Defined above    
 def checkIfValidSource(sourceNameVal):
+    #Function To Check if the attribute Value Is present In Valid Source List Defined above    
     for validsource in validCrossWalks:
         if validsource in sourceNameVal:
             return True
     return False
 
-#Returns the nested Level for each Attribute
 def getNestedLevel(attribute):
+    #Returns the nested Level for each Attribute
     return math.ceil(attribute.count('/') /2) 
 
-#Function Defined for Recursive Parsing. Currently Customized for 2 Levels but TODO: Generic Formatting
-#The FirstLevelKey and SecondLevelKey are always 'Value' But we are passing this from another function so that 
-#in custom cases where need something else like lookupcode in CC, we can do that as well
 def secondLevelParser(keyModel, valueModels, secondLevelKey, keyToFetchForFirstLevel, keyToFetchForSecondLevel):
+    #Function Defined for Recursive Parsing. Currently Customized for 2 Levels but TODO: Generic Formatting
+    #The FirstLevelKey and SecondLevelKey are always 'Value' But we are passing this from another function so that 
+    #in custom cases where need something else like lookupcode in CC, we can do that as well
     for valueModel in valueModels:  
         if valueModel["uri"] in keyModel.completeAttributeUri:
             obj = valueModel[keyToFetchForFirstLevel]
@@ -85,13 +53,13 @@ def secondLevelParser(keyModel, valueModels, secondLevelKey, keyToFetchForFirstL
                 return obj
     return None 
 
-#This is the main Parser which is called for each KeyModel. 
-# KeyModel - An Object from the custom defined class which contains all attributes for one entity for one crosswalk
-# ValueModels - List Of Value for a specific Key
-# CurrentKey - KeyName for which we have values in ValuesModels
-# CurrentLevel - Nested Level of the Entity
-# keyToFetch - This is always usually 'value' because that is what we want, but for custom code logic we may pass this different
 def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch):
+    #This is the main Parser which is called for each KeyModel. 
+    # KeyModel - An Object from the custom defined class which contains all attributes for one entity for one crosswalk
+    # ValueModels - List Of Value for a specific Key
+    # CurrentKey - KeyName for which we have values in ValuesModels
+    # CurrentLevel - Nested Level of the Entity
+    # keyToFetch - This is always usually 'value' because that is what we want, but for custom code logic we may pass this different
     if currentLevel == 1 and currentKey in list_RequiredField_For_Single_Nested_Data:
         for valueModel in valueModels:
             if valueModel["uri"] == keyModel.completeAttributeUri:
@@ -120,9 +88,9 @@ def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch)
          
     return None 
     
-#This function takes in the entire entity data and crosswalk(from the same enitityData)
-# Parses Each Objects created as per data struct and then Evaluates the Value for them to add to final Array
 def parseAndPopulateData(data, crossWalkPath):
+    #This function takes in the entire entity data and crosswalk(from the same enitityData)
+    # Parses Each Objects created as per data struct and then Evaluates the Value for them to add to final Array
     crossWalkUri = crossWalkPath['uri']
     crossWalkValue = crossWalkPath['value']
     createDate = crossWalkPath['createDate']
@@ -167,11 +135,10 @@ def parseAndPopulateData(data, crossWalkPath):
     if(finalData and flag):
         output_data.append(finalData)
     
-#For each element in EntityArray, We find the SourceTable , CrossWalks And Parses them to 
-# identify AttributeKey, NestedLevels, URI to match and creates an Object for each entity
-# Each such object is added to an array for later to be evaluated
 def parseEntity(entityData):
-    
+    #For each element in EntityArray, We find the SourceTable , CrossWalks And Parses them to 
+    # identify AttributeKey, NestedLevels, URI to match and creates an Object for each entity
+    # Each such object is added to an array for later to be evaluated
     for crossWalkPath in entityData['crosswalks']:  
         if "sourceTable" in crossWalkPath:
             if(checkIfValidSource(crossWalkPath["sourceTable"])):
@@ -192,29 +159,69 @@ def parseEntity(entityData):
                 print("Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
         else:
             print("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+
+def main():
+    s3 = boto3.client('s3')
+    #Source Json File Path Defined Here
+    file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/HCP_Traverse_3Load.json')
+    lines = file['Body'].read().decode('utf-8')
+    json_content = json.loads(lines)
+    POC_INBOUND='s3://lly-future-state-arch-poc-dev/input_data'
     
+    #Source File Name Defined Here
+    #json_file_path = POC_INBOUND
+    #f = open(json_file_path, encoding="UTF-8") 
+    print 
+    #The source file is assumed to be an array of json but the format does not enclose in array format
+    #Hence PrePending and Pospending array brackets to convert to valid Json
+    newData = "[" + json_content +"]" 
 
-#Application Main
-# Load All Data and for eachData Run the Function
-for entity in allData:
-    parseEntity(entity)
+    #Output type Defined as Json. Can be CSV as well. Need to handle case in case we need csv data
+    output_type='json'
 
-#Post Processing, Dump all data to json
-fileName= POC_INBOUND + "/data_de_profiled_simplefied_json" + "." + output_type
+    #There are the prefixes of valid sources we want to read from input json. 
+    #validCrossWalks= ["CODS","MDU","CTLN"]
+    validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
 
-try:
-    os.remove(fileName)
-except OSError:
-    pass
+    #Required Fields in Output Json
+    list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
+    list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
+    list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
+    list_RequiredField_Custom=["EntityId"]
 
-with open(fileName,'a') as outfile:
-    for data in output_data:
-        json.dump(data, outfile)
-        outfile.write("\n")
-        #outfile.write(data)a
-        #json.dump(output_data, outfile)
-    list_SimpleModels.clear()  
+    #Simple ListOf Struct Data structure to hold information on crossWalks for Each Entity
+    list_SimpleModels = []
+    # returns JSON object as  
+    # a dictionary 
 
-# Closing file 
-f.close() 
-      
+    #Loading Data to Memory as Json
+    allData = json.loads(newData)  
+
+    #Initializing Output Array Empty
+    output_data = []
+
+    #Application Main
+    # Load All Data and for eachData Run the Function
+    for entity in allData:
+        parseEntity(entity)
+
+    #Post Processing, Dump all data to json
+    fileName= POC_INBOUND + "/data_de_profiled_simplefied_json" + "." + output_type
+
+    try:
+        os.remove(fileName)
+    except OSError:
+        pass
+
+    with open(fileName,'a') as outfile:
+        for data in output_data:
+            json.dump(data, outfile)
+            outfile.write("\n")
+            #outfile.write(data)a
+            #json.dump(output_data, outfile)
+        list_SimpleModels.clear()  
+
+    # Closing file 
+    f.close()
+if __name__ == "__main__":
+    main()
