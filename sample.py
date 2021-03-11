@@ -13,6 +13,21 @@ import json
 import math
 import os
 import boto3
+import time 
+
+#There are the prefixes of valid sources we want to read from input json. 
+#validCrossWalks= ["CODS","MDU","CTLN"]
+validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+
+#Required Fields in Output Json
+list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
+list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
+list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
+list_RequiredField_Custom=["EntityId"]
+list_SimpleModels = []
+outputFileName = ""
+logFileName = ""
+logDataToFile = True
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -24,7 +39,15 @@ class SimpleJsonStruct:
         self.trimmedAttributeUri = trimmedAttributeUri
         self.completeAttributeUri = completeAttributeUri
         self.nestedLevel = nestedLevel
- 
+
+def log(logData):
+    if(logDataToFile):
+        with open(logFileName,'a') as outfile:
+            outfile.write(logData) 
+            outfile.write("\n")
+    else:
+        print(logData)
+
 def checkIfValidSource(sourceNameVal):
     #Function To Check if the attribute Value Is present In Valid Source List Defined above    
     for validsource in validCrossWalks:
@@ -83,12 +106,13 @@ def recursiveParser(keyModel, valueModels, currentKey, currentLevel, keyToFetch)
         else:
             return None
     elif currentLevel > 2:
-        print("Error: Found Level " + str(currentLevel) + " attrbute. Unhandled Condition, Attribute Skipped")
+        log("Error: Found Level more than 2 attrbute. Unhandled Condition, Attribute Skipped for key: " + currentKey)
+        log(currentLevel)
  
          
     return None 
     
-def parseAndPopulateData(data, crossWalkPath):
+def parseAndPopulateData(data, crossWalkPath, output_data):
     #This function takes in the entire entity data and crosswalk(from the same enitityData)
     # Parses Each Objects created as per data struct and then Evaluates the Value for them to add to final Array
     crossWalkUri = crossWalkPath['uri']
@@ -135,7 +159,7 @@ def parseAndPopulateData(data, crossWalkPath):
     if(finalData and flag):
         output_data.append(finalData)
     
-def parseEntity(entityData):
+def parseEntity(entityData, output_data):
     #For each element in EntityArray, We find the SourceTable , CrossWalks And Parses them to 
     # identify AttributeKey, NestedLevels, URI to match and creates an Object for each entity
     # Each such object is added to an array for later to be evaluated
@@ -151,69 +175,65 @@ def parseEntity(entityData):
                         attribKey = attribute[attributeStartKeyIndex + len(key) :]
                         obj = SimpleJsonStruct(attribute, getNestedLevel(attribKey), attribKey)
                         list_SimpleModels.append(obj)
-                    parseAndPopulateData(entityData, crossWalkPath)
+                    parseAndPopulateData(entityData, crossWalkPath, output_data)
                     list_SimpleModels.clear()
                 else:
-                    print("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
+                    log("Warning: Attributes Missing for with URI " + crossWalkPath["uri"] + " with sourceTable: " + crossWalkPath["sourceTable"] + ". Hence Ignored during Processing.")    
             else:
-                print("Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
+                log("Information: Excluding from Source . Not defined as valid source - " + crossWalkPath["sourceTable"])
         else:
-            print("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+            log("Warning: CrossWalk with URI " + crossWalkPath["uri"] + " has no sourceTable Attribute. Hence Ignored during processing.")
+
+def deleteFileIfExists(fileNameToDelete):
+    try:    
+        os.remove(fileNameToDelete)
+    except OSError:
+        pass 
 
 def main():
     s3 = boto3.client('s3')
     #Source Json File Path Defined Here
     file = s3.get_object(Bucket='lly-future-state-arch-poc-dev', Key='input_data/HCP_Traverse_3Load.json')
-    lines = file['Body'].read().decode('utf-8')
-    json_content = json.loads(lines)
-    POC_INBOUND='s3://lly-future-state-arch-poc-dev/input_data'
+    f = open(file, encoding = "UTF-8") 
+    lines = f.read()
+    #lines = file['Body'].read().decode('utf-8')
     
-    #Source File Name Defined Here
-    #json_file_path = POC_INBOUND
-    #f = open(json_file_path, encoding="UTF-8") 
-    print 
     #The source file is assumed to be an array of json but the format does not enclose in array format
     #Hence PrePending and Pospending array brackets to convert to valid Json
-    newData = "[" + json_content +"]" 
+    new_lines = "[" + lines + "]"
+    
+    #Loading Data to Memory as Json
+    allData = json.loads(new_lines)
 
-    #Output type Defined as Json. Can be CSV as well. Need to handle case in case we need csv data
+    POC_INBOUND = 's3://lly-future-state-arch-poc-dev/input_data'
     output_type='json'
-
-    #There are the prefixes of valid sources we want to read from input json. 
-    #validCrossWalks= ["CODS","MDU","CTLN"]
-    validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
-
-    #Required Fields in Output Json
-    list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
-    list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
-    list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
-    list_RequiredField_Custom=["EntityId"]
+    ts = time.time() 
+    logFileName = POC_INBOUND + "/logFile_" + ts + "." + "txt"
+    
+    #Post Processing, Dump all data to json
+    outputFileName= POC_INBOUND + "/data_de_profiled_simplefied_json" + "." + output_type
+    
+    #Delete File If Exists
+    deleteFileIfExists(logFileName)
+    deleteFileIfExists(outputFileName)
 
     #Simple ListOf Struct Data structure to hold information on crossWalks for Each Entity
     list_SimpleModels = []
-    # returns JSON object as  
-    # a dictionary 
-
-    #Loading Data to Memory as Json
-    allData = json.loads(newData)  
-
+    
     #Initializing Output Array Empty
     output_data = []
 
     #Application Main
     # Load All Data and for eachData Run the Function
     for entity in allData:
-        parseEntity(entity)
-
-    #Post Processing, Dump all data to json
-    fileName= POC_INBOUND + "/data_de_profiled_simplefied_json" + "." + output_type
+        parseEntity(entity, output_data) 
 
     try:
-        os.remove(fileName)
+        os.remove(outputFileName)
     except OSError:
         pass
 
-    with open(fileName,'a') as outfile:
+    with open(outputFileName,'a') as outfile:
         for data in output_data:
             json.dump(data, outfile)
             outfile.write("\n")
@@ -223,5 +243,6 @@ def main():
 
     # Closing file 
     f.close()
+
 if __name__ == "__main__":
     main()
