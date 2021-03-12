@@ -11,9 +11,11 @@
 import json
 import math
 import os
-#import boto3 
+import boto3 
 import collections
 from datetime import datetime
+ 
+
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -35,10 +37,10 @@ class DataJsonFlatten:
     fileVal = None
     outLogfile = None
 
-    logFileName = "" 
     dictionary_SimpleModels = None
 
     output_data = [] 
+    logData = []
     output_type='json'  
     #Required Fields in Output Json
     list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
@@ -51,11 +53,16 @@ class DataJsonFlatten:
     is_local_run = True
     print_to_console = True
 
-    fileName = ""
-    flePath = ""
+    fileName = "" 
     POC_INBOUND = ""
-    outputFileName = ""
-    
+
+    outputFilePath = "" 
+    logFilePath = "" 
+    outputFileName = "" 
+    logFileName = ""
+
+    fileConcatinator = '/' 
+
     def __init__(self):
         print("Information: Initialized Script")
 
@@ -74,30 +81,34 @@ class DataJsonFlatten:
         values.append(value)
         dictionary[key] = values
         return dictionary
-
+ 
     def getNowTimestampormatted(self): 
         now = datetime.now()
         timestampStr = now.strftime('%Y-%m-%dT%H-%M-%S') 
         return timestampStr
 
-    def setFileInputDirectory(self):
-        dateTimeObj = datetime.now()  
-        timestampStr = self.getNowTimestampormatted()
-        fileConcatinator = '/' 
+    def setFileInputDirectory(self): 
+        timestampStr = self.getNowTimestampormatted() 
 
         if(self.is_local_run):
             self.POC_INBOUND = 'H:/python'
             self.fileName = 'sample.json'
-            self.filePath = self.POC_INBOUND + fileConcatinator + self.fileName
-            self.logFileName = self.POC_INBOUND + fileConcatinator + "logFile_" + timestampStr + "." + "txt"
-            self.outputFileName = self.POC_INBOUND + fileConcatinator +"data_de_profiled_simplefied_json" + "." + self.output_type
-      
+            self.filePath = self.POC_INBOUND + self.fileConcatinator + self.fileName
+            self.logFileName = "logFile_" + timestampStr + "." + "txt"
+            self.logFilePath = self.POC_INBOUND + self.fileConcatinator + self.logFileName
+            self.outputFileName = "data_de_profiled_simplefied_json" + "." + self.output_type
+            self.outputFilePath = self.POC_INBOUND + self.fileConcatinator + self.outputFileName
         else:  
-            POC_INBOUND = 's3://lly-future-state-arch-poc-dev' + fileConcatinator + 'input_data'
+            print("")
+            #SingleLineComment
+            POC_INBOUND = 's3://lly-future-state-arch-poc-dev' + self.fileConcatinator + 'input_data'
             self.fileName = 'POC_HCP_INPUT_FILE_23.json' 
-            self.filePath =  POC_INBOUND + fileConcatinator +  self.fileName  
-            self.logFileName = self.POC_INBOUND + fileConcatinator + "logFile_" + timestampStr + "." + "txt"
-            self.outputFileName = POC_INBOUND + fileConcatinator +  "data_de_profiled_simplefied_json" + "." + self.output_type
+            self.filePath =  POC_INBOUND + self.fileConcatinator +  self.fileName  
+            self.logFileName = "logFile_" + timestampStr + "." + "txt"
+            self.logFilePath = "input_data/" + self.fileConcatinator + self.logFileName
+            self.outputFileName = "data_de_profiled_simplefied_json" + "." + self.output_type
+            self.outputFilePath = "input_data/" + self.fileConcatinator +  self.outputFileName
+            #SingleLineComment
 
     def getInputLines(self):
         lines = ""
@@ -106,24 +117,30 @@ class DataJsonFlatten:
             self.fileVal = open(self.filePath, encoding = "UTF-8") 
             lines = self.fileVal.read()
 
-        else: 
-            print("Hello")
-            #s3=boto3.client('s3')  
-            #inputFolder = 'input_data'
-            #file = s3.get_object(Bucket= self.POC_INBOUND, Key= inputFolder + fileConcatinator + self.fileName)
-            #lines = file['Body'].read().decode('UTF-8') 
+        else:   
+            print("")
+            #SingleLineComment
+            s3=boto3.client('s3')  
+            inputFolder = 'input_data'
+            file = s3.get_object(Bucket= self.POC_INBOUND, Key= inputFolder + self.fileConcatinator + self.fileName)
+            lines = file['Body'].read().decode('UTF-8')  
+            #SingleLineComment
         return lines
 
     def log(self, logData):
         ts = self.getNowTimestampormatted()
 
         if(self.log_data_to_file):
-            with open(self.logFileName,'a') as self.outLogfile:
-                self.outLogfile.write(ts + " " + logData) 
-                self.outLogfile.write("\n")
+            self.logData.append(ts + " " +logData)
         
         if self.print_to_console:
             print(ts + " " +logData)
+
+    def getOutputAsStringLineSeperated(self, inputArray):
+        str = ''
+        for obj in inputArray :
+            str = str +  json.dumps(obj)  +  os.linesep
+        return str
 
     def checkIfValidSource(self, sourceNameVal):
         #Function To Check if the attribute Value Is present In Valid Source List Defined above    
@@ -168,10 +185,8 @@ class DataJsonFlatten:
         if currentLevel == 1 and currentKey in self.list_RequiredField_For_Single_Nested_Data:
             for valueModel in valueModels:
                 if valueModel["uri"] == keyModel.completeAttributeUri:
-                    obj = valueModel[keyToFetch]
-                    
-                    #Custom Mapping for Specific Attributes
-
+                    obj = valueModel[keyToFetch] 
+                    #Custom Mapping for Specific Attributes 
                     return obj
         
         elif currentLevel == 2 and currentKey in self.list_RequiredField_For_Double_Nested_Data:
@@ -291,61 +306,52 @@ class DataJsonFlatten:
         except:
             pass 
 
+    def writetoFile(self, output_string, filePath, fileName): 
+
+        if(self.is_local_run): 
+            with open(filePath,'a') as outfile:
+                outfile.write(output_string) 
+        else: 
+            print("")
+            #SingleLineComment"
+            s3 = boto3.resource()
+            s3.put_object(Body= output_string, Bucket='lly-future-state-arch-poc-dev', Key="input_data/" + fileName) 
+            #SingleLineComment
     def main(self):
-        
-        self.setFileInputDirectory()
-        lines = self.getInputLines()
-        self.initDictionary()
+        try:
+            self.setFileInputDirectory()
+            lines = self.getInputLines()
+            self.initDictionary()
 
-        #The source file is assumed to be an array of json but the format does not enclose in array format
-        #Hence PrePending and Pospending array brackets to convert to valid Json
-        new_lines = "[" + lines + "]"
-        
-        #Loading Data to Memory as Json
-        allData = json.loads(new_lines)  
-         
-        #Delete File If Exists
-        self.deleteFileIfExists(self.logFileName)
-        self.deleteFileIfExists(self.outputFileName)  
-
-        #Application Main
-        # Load All Data and for eachData Run the Function
-        for entity in allData:
-            self.parseEntity(entity)  
-
-        with open(self.outputFileName,'a') as outfile:
-            if(self.is_local_run):
-                for data in self.output_data:
-                    json.dump(data, outfile)
-                    outfile.write("\n")
-                    #outfile.write(data)a
-                    #json.dump(output_data, outfile)
-            else:
-                print("Hello")
-                """
-                s3=boto3.client('s3')
-                for data in self.output_data:
-                    s3.put_object(
-                        Body = str(json.dump(data, outfile)),
-                        Bucket='lly-future-state-arch-poc-dev',
-                        Key='input_data/data_de_profiled_simplefied_json.json'
-                    )
-                    s3.put_object(
-                        Body = outfile.write("\n"),
-                        Bucket='lly-future-state-arch-poc-dev',
-                        Key='input_data/data_de_profiled_simplefied_json.json'
-                    )
-                """
-                    
-
-           
-        # Closing file 
-        if(self.fileVal and self.fileVal is not None):
-            self.fileVal.close()
-
+            #The source file is assumed to be an array of json but the format does not enclose in array format
+            #Hence PrePending and Pospending array brackets to convert to valid Json
+            new_lines = "[" + lines + "]"
             
-        if(self.outLogfile and self.outLogfile is not None):
-            self.outLogfile.close()
+            #Loading Data to Memory as Json
+            allData = json.loads(new_lines)  
+            
+            #Delete File If Exists
+            self.deleteFileIfExists(self.logFilePath)
+            self.deleteFileIfExists(self.outputFilePath)  
+
+            #Application Main
+            # Load All Data and for eachData Run the Function
+            for entity in allData:
+                self.parseEntity(entity)  
+
+            output_string = self.getOutputAsStringLineSeperated(self.output_data) 
+            self.writetoFile(output_string, self.outputFilePath, self.outputFileName) 
+            
+            # Closing file 
+            if(self.fileVal and self.fileVal is not None):
+                self.fileVal.close()
+ 
+            if(self.outLogfile and self.outLogfile is not None):
+                self.outLogfile.close() 
+        finally: 
+            log_output_string = self.getOutputAsStringLineSeperated(self.logData)  
+            self.writetoFile(log_output_string, self.logFilePath, self.logFileName)
+
 
 if __name__ == "__main__":
     x = DataJsonFlatten()
