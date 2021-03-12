@@ -50,7 +50,7 @@ class DataJsonFlatten:
 
     #Env Run Variables
     log_data_to_file = True
-    is_local_run = True
+    is_local_run = False
     print_to_console = True
 
     fileName = "" 
@@ -101,8 +101,8 @@ class DataJsonFlatten:
         else:  
             print("")
             #SingleLineComment
-            POC_INBOUND = 's3://lly-future-state-arch-poc-dev' + self.fileConcatinator + 'input_data'
-            self.fileName = 'POC_HCP_INPUT_FILE_23.json' 
+            POC_INBOUND = 'lly-future-state-arch-poc-dev' + self.fileConcatinator + 'input_data'
+            self.fileName = 'sample.json' 
             self.filePath =  POC_INBOUND + self.fileConcatinator +  self.fileName  
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = "input_data/" + self.fileConcatinator + self.logFileName
@@ -122,7 +122,7 @@ class DataJsonFlatten:
             #SingleLineComment
             s3=boto3.client('s3')  
             inputFolder = 'input_data'
-            file = s3.get_object(Bucket= self.POC_INBOUND, Key= inputFolder + self.fileConcatinator + self.fileName)
+            file = s3.get_object(Bucket= 'lly-future-state-arch-poc-dev', Key= inputFolder + self.fileConcatinator + self.fileName)
             lines = file['Body'].read().decode('UTF-8')  
             #SingleLineComment
         return lines
@@ -136,10 +136,13 @@ class DataJsonFlatten:
         if self.print_to_console:
             print(ts + " " +logData)
 
-    def getOutputAsStringLineSeperated(self, inputArray):
+    def getOutputAsStringLineSeperated(self, inputArray, shouldDump):
         str = ''
         for obj in inputArray :
-            str = str +  json.dumps(obj)  +  os.linesep
+            if(shouldDump):
+                str = str +  json.dumps(obj)  +  os.linesep
+            else: 
+                str = str +  obj  +  os.linesep
         return str
 
     def checkIfValidSource(self, sourceNameVal):
@@ -307,15 +310,15 @@ class DataJsonFlatten:
             pass 
 
     def writetoFile(self, output_string, filePath, fileName): 
-
+        print(fileName, filePath)
         if(self.is_local_run): 
             with open(filePath,'a') as outfile:
                 outfile.write(output_string) 
         else: 
             print("")
             #SingleLineComment"
-            s3 = boto3.resource()
-            s3.put_object(Body= output_string, Bucket='lly-future-state-arch-poc-dev', Key="input_data/" + fileName) 
+            client = boto3.client('s3') 
+            client.put_object(Body=output_string, Bucket='lly-future-state-arch-poc-dev', Key=  fileName)  
             #SingleLineComment
     def main(self):
         try:
@@ -336,11 +339,16 @@ class DataJsonFlatten:
 
             #Application Main
             # Load All Data and for eachData Run the Function
-            for entity in allData:
+            for entity in allData: 
+                print("\n Running Entity")
                 self.parseEntity(entity)  
-
-            output_string = self.getOutputAsStringLineSeperated(self.output_data) 
-            self.writetoFile(output_string, self.outputFilePath, self.outputFileName) 
+            
+            print("\n Getting OutputString")
+            output_string = self.getOutputAsStringLineSeperated(self.output_data, True) 
+            print("\n Got OutputString")
+            self.writetoFile(output_string, self.outputFilePath, "Data/" + self.outputFileName) 
+            
+            print("\n Writing completed")
             
             # Closing file 
             if(self.fileVal and self.fileVal is not None):
@@ -349,8 +357,10 @@ class DataJsonFlatten:
             if(self.outLogfile and self.outLogfile is not None):
                 self.outLogfile.close() 
         finally: 
-            log_output_string = self.getOutputAsStringLineSeperated(self.logData)  
-            self.writetoFile(log_output_string, self.logFilePath, self.logFileName)
+            print("\n Getting Log File String")
+            log_output_string = self.getOutputAsStringLineSeperated(self.logData, False)
+            print("\n Wrote Output Log completed")
+            self.writetoFile(log_output_string,  self.logFilePath, "logs/"+self.logFileName) 
 
 
 if __name__ == "__main__":
