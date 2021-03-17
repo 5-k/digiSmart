@@ -33,7 +33,7 @@ class SimpleJsonStruct:
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
     #validCrossWalks= ["CODS"]
-    validCrossWalks= ["CODS","MDU","CTLN","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+    validCrossWalks=["CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     fileVal = None
     outLogfile = None
 
