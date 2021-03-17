@@ -123,7 +123,7 @@ class DataJsonFlatten:
             s3=boto3.client('s3')  
             inputFolder = 'input_data'
             file = s3.get_object(Bucket= 'lly-future-state-arch-poc-dev', Key= inputFolder + self.fileConcatinator + self.fileName)
-            lines = file['Body'].read().decode('UTF-8').splitlines()
+            lines = file['Body'].read(2).decode('UTF-8') 
 
             #SingleLineComment
         return lines
@@ -322,7 +322,7 @@ class DataJsonFlatten:
             client.put_object(Body=output_string, Bucket='lly-future-state-arch-poc-dev', Key=  fileName)  
             #SingleLineComment
     
-    def runForOneLine(self, snew_lines):
+    def runForOneLine(self, new_lines):
         try: 
             #Loading Data to Memory as Json
             allData = json.loads(new_lines)  
@@ -363,6 +363,7 @@ class DataJsonFlatten:
             self.initDictionary()
             i = 0
             for line in lines:
+                 print(line)
                 arr = line.split()
                 print(arr)
                 i = i + 1
