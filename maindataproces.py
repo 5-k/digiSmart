@@ -123,7 +123,7 @@ class DataJsonFlatten:
             s3=boto3.client('s3')  
             inputFolder = 'input_data'
             file = s3.get_object(Bucket= 'lly-future-state-arch-poc-dev', Key= inputFolder + self.fileConcatinator + self.fileName)
-            lines = file['Body'].read(2).decode('UTF-8') 
+            return file
 
             #SingleLineComment
         return lines
@@ -327,10 +327,6 @@ class DataJsonFlatten:
             #Loading Data to Memory as Json
             allData = json.loads(new_lines)  
             
-            #Delete File If Exists
-            self.deleteFileIfExists(self.logFilePath)
-            self.deleteFileIfExists(self.outputFilePath)  
-
             #Application Main
             # Load All Data and for eachData Run the Function
             for entity in allData: 
@@ -359,17 +355,17 @@ class DataJsonFlatten:
     def main(self):
         try:
             self.setFileInputDirectory()
-            lines = self.getInputLines()
-            self.initDictionary()
-            i = 0
-            for line in lines:
-                 print(line)
-                arr = line.split()
-                print(arr)
-                i = i + 1
             
-            print('total lines were: ')
-            print(str(i))
+            #Delete File If Exists
+            self.deleteFileIfExists(self.logFilePath)
+            self.deleteFileIfExists(self.outputFilePath)  
+
+            file = self.getInputLines()
+            for i,line in enumerate(file['Body'].iter_lines()):
+                line1 = line.decode('utf-8')
+                self.log("Running for one line:")
+                print(str(i))
+                self.runForOneLine(line1) 
 
         finally: 
             print("\n Getting Log File String")
