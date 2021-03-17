@@ -102,7 +102,7 @@ class DataJsonFlatten:
             print("")
             #SingleLineComment
             POC_INBOUND = 'lly-future-state-arch-poc-dev' + self.fileConcatinator + 'input_data'
-            self.fileName = 'sample.json' 
+            self.fileName = 'Source_file.json' 
             self.filePath =  POC_INBOUND + self.fileConcatinator +  self.fileName  
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = "input_data/" + self.fileConcatinator + self.logFileName
@@ -322,7 +322,7 @@ class DataJsonFlatten:
             client.put_object(Body=output_string, Bucket='lly-future-state-arch-poc-dev', Key=  fileName)  
             #SingleLineComment
     
-    def runForOneLine(new_lines):
+    def runForOneLine(self, snew_lines):
         try: 
             #Loading Data to Memory as Json
             allData = json.loads(new_lines)  
@@ -369,7 +369,7 @@ class DataJsonFlatten:
             
             print('total lines were: ')
             print(str(i))
-            
+
         finally: 
             print("\n Getting Log File String")
              
