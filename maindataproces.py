@@ -63,7 +63,7 @@ class DataJsonFlatten:
     outLogfile = None 
     final_output_string_for_s3 = ''
     final_log_string_for_s3 = ''
-
+    s3=None
     #static string
     fileConcatinator = '/' 
     bucket_name = 'lly-future-state-arch-poc-dev'
@@ -129,9 +129,9 @@ class DataJsonFlatten:
 
         else:    
             #SingleLineComment
-            s3=boto3.client('s3')  
+            self.s3=boto3.client('s3')  
             inputFolder = 'input_data'
-            self.file = s3.get_object(Bucket= self.bucket_name, Key= inputFolder + self.fileConcatinator + self.fileName)
+            self.file = self.s3.get_object(Bucket= self.bucket_name, Key= inputFolder + self.fileConcatinator + self.fileName)
             return self.file
 
             #SingleLineComment
@@ -346,10 +346,21 @@ class DataJsonFlatten:
                 outfile.write(output_string) 
         else:  
             #SingleLineComment"
-            client = boto3.client('s3') 
-            client.put_object(Body=output_string, Bucket=self.bucket_name, Key=  fileName)  
+            self.s3.put_object(Body=output_string, Bucket=self.bucket_name, Key=  fileName)  
             #SingleLineComment
     
+    def appendToS3File(self):
+        outputFileExistingData = ''
+        try:
+            outputFileExistingFile = self.s3.get_object(Bucket= self.bucket_name, Key= self.outputFilePath)
+            outputFileExistingData = outputFileExistingFile['Body'].read().decode('UTF-8')
+        except botocore.exceptions.ClientError as e:
+            outputFileExistingData = ''
+            
+        self.final_output_string_for_s3 = outputFileExistingData + self.final_output_string_for_s3
+        self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
+        self.final_output_string_for_s3 = ''
+
     def runTransformation(self, new_lines):
         try: 
             #Loading Data to Memory as Json 
@@ -394,8 +405,12 @@ class DataJsonFlatten:
             self.log('Is Read Line By Line = ' + str(self.read_line_byLine)) 
 
             file = self.getFile() 
-            self.log('Completed Get File') 
-            s3=boto3.client('s3')  
+            s3 = None
+            if(self.is_local_run):
+                self.log('Completed Get File Local') 
+            else: 
+                self.log('Completed Get File S3') 
+                s3=boto3.client('s3')   
 
             if(self.read_line_byLine):
                 if(self.is_local_run):
@@ -415,16 +430,19 @@ class DataJsonFlatten:
                         self.log('Iterating over line')
                         self.log(str(i))
                         if(i % 100 == 0):
-                            outputFileExistingFile = s3.get_object(Bucket= self.bucket_name, Key= self.outputFilePath)
-                            outputFileExistingData = outputFileExistingFile['Body'].read().decode('UTF-8')  
-                            self.final_output_string_for_s3 = outputFileExistingData + self.final_output_string_for_s3
-                            self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
-                            self.final_output_string_for_s3 = ''
-
-                            logFileExistingFile = s3.get_object(Bucket= self.bucket_name, Key= self.logFilePath)
-                            logFileExistingData = logFileExistingFile['Body'].read().decode('UTF-8')  
+                            
+                            self.appendToS3File()
+                            '''
+                            logFileExistingData = ''
+                            try:
+                                logFileExistingFile = s3.get_object(Bucket= self.bucket_name, Key= self.logFilePath)
+                                logFileExistingData = logFileExistingFile['Body'].read().decode('UTF-8')  
+                            except botocore.exceptions.ClientError as e:
+                                logFileExistingData = '' 
+                            
                             self.final_log_string_for_s3 = logFileExistingData + self.final_log_string_for_s3
                             self.writetoFile(self.final_log_string_for_s3, self.logFilePath,  self.logFilePath) 
+                            '''
                             self.final_log_string_for_s3 = '' 
                          
 
@@ -453,9 +471,11 @@ class DataJsonFlatten:
             if(self.is_local_run):
                 print('End Of Program')
             else:
-                self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
-                self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath) 
-              
+                self.appendToS3File()
+                #self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
+                #self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath)  
+             
+ 
 if __name__ == "__main__":
     x = DataJsonFlatten()
     x.main()
