@@ -69,10 +69,46 @@ def lambda_handler(event, context):
         app =[]
         # get query results
         result = client.get_query_results(QueryExecutionId=query_execution_id)
-        print(result)
+        allData =  result['ResultSet']['Rows']
+        columnList = []
+        outputData = [] 
+
+        if(allData and len(allData) > 1 ):
+            columnHeaders = allData[0]['Data'] 
+
+            for column in columnHeaders: 
+                columnList.append(column['VarCharValue'])
+
+            i = 0
+            for data in allData:
+                if i == 0:
+                    i = i + 1
+                    continue
+                else:
+                    i = i + 1
+                    j = 0 
+                    row = {}
+                    for singleRow in data['Data']:
+                        key = columnList[j]
+                        value = ''
+                        if 'VarCharValue' in singleRow:
+                            value = singleRow['VarCharValue']
+
+                        if(key=='email' or key =='phone'):
+                            values =  []
+                            if value and len(value) > 0:
+                                values = value.split("|")
+
+                            row[key] = values
+                            j = j+ 1
+                        else:
+                            row[key] = str(value)
+                            j = j+ 1
+
+                    outputData.append(row)
         return {
             "statusCode": 200,
-            "body": json.dumps(result)
+            "body": json.dumps(outputData)
         }
 
         '''if len(result['ResultSet']['Rows']) >= 2:
