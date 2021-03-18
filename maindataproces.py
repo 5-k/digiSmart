@@ -33,26 +33,28 @@ class SimpleJsonStruct:
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
     #validCrossWalks= ["CODS"]
-    validCrossWalks=["CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+    validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     fileVal = None
     outLogfile = None
-    dictionary_SimpleModels = None
-    read_line_byLine = True
+    dictionary_SimpleModels = {}
 
     output_data = [] 
     logData = []
     output_type='json'  
     #Required Fields in Output Json
-    list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName","Gender","Source","OriginalSource"]
+    list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName",
+    "Gender","Source","OriginalSource", "Address", "Specialities"]
+
     list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
     list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
     list_RequiredField_Custom=["EntityId"]
 
     #Env Run Variables
     log_data_to_file = True
-    is_local_run = False
-    print_to_console = True
-
+    is_local_run = True
+    print_to_console = True 
+    read_line_byLine = False
+    
     fileName = "" 
     POC_INBOUND = ""
 
@@ -201,7 +203,7 @@ class DataJsonFlatten:
                 return self.secondLevelParser(keyModel, valueModels, 'Flag', keyToFetch, keyToFetch)  
             
             elif currentKey == 'Phone':
-                return self.secondLevelParser(keyModel, valueModels, 'Number', keyToFetch, keyToFetch)   
+                return self.secondLevelParser(keyModel, valueModels, 'Number', keyToFetch, keyToFetch)    
 
             else:
                 return None
@@ -211,7 +213,16 @@ class DataJsonFlatten:
     
             
         return None 
-        
+    
+    def combineMultipleInfo(self, objValue, combinedValueForKey):
+        if objValue and (len(objValue) > 0): 
+            if(combinedValueForKey and len(combinedValueForKey) > 0 ):
+                combinedValueForKey = combinedValueForKey + "|" + str(objValue)
+            else:
+                combinedValueForKey = str(objValue)
+        return combinedValueForKey
+
+
     def parseAndPopulateData(self, data, crossWalkPath):
         #This function takes in the entire entity data and crosswalk(from the same enitityData)
         # Parses Each Objects created as per data struct and then Evaluates the Value for them to add to final Array
@@ -241,11 +252,18 @@ class DataJsonFlatten:
                     if(key == 'CountryCode'):
                         customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'lookupCode')
                         finalData['CountryCodeValue']= (str(customObjValue)) 
+                    
+                    if(key == 'Address' or key == 'Specialities'):
+                        customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'label')
+                        combinedValueForKey = self.combineMultipleInfo(customObjValue, combinedValueForKey)
+                        finalData['Address']= combinedValueForKey
+                        finalJsonHasKeys = combinedValueForKey and len(combinedValueForKey) > 0
+                        continue
 
                     objValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'value')
                     if objValue and (len(objValue) > 0): 
                         if(combinedValueForKey and len(combinedValueForKey) > 0 ):
-                            combinedValueForKey = combinedValueForKey + "," + str(objValue)
+                            combinedValueForKey = combinedValueForKey + "|" + str(objValue)
                         else:
                             combinedValueForKey = str(objValue)
                         flag=True 
@@ -287,6 +305,8 @@ class DataJsonFlatten:
                     if "attributes" in crossWalkPath and bool(crossWalkPath["attributes"]):
                         
                         for attribute in crossWalkPath['attributes']:
+                            if('Address' in attribute):
+                                print(attribute)
                             key = '/attributes/'
                             attributeStartKeyIndex = attribute.index(key)
                             trimmedURI = attribute[attributeStartKeyIndex + len(key) :]
