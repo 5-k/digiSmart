@@ -36,8 +36,8 @@ class DataJsonFlatten:
     validCrossWalks=["CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     fileVal = None
     outLogfile = None
-
     dictionary_SimpleModels = None
+    read_line_byLine = True
 
     output_data = [] 
     logData = []
@@ -110,20 +110,19 @@ class DataJsonFlatten:
             self.outputFilePath = "input_data/" + self.fileConcatinator +  self.outputFileName
             #SingleLineComment
 
-    def getInputLines(self):
+    def getFile(self):
         lines = ""
 
         if(self.is_local_run):  
             self.fileVal = open(self.filePath, encoding = "UTF-8") 
-            lines = self.fileVal.read()
+            return self.fileVal
 
-        else:   
-            print("")
+        else:    
             #SingleLineComment
             s3=boto3.client('s3')  
             inputFolder = 'input_data'
-            file = s3.get_object(Bucket= 'lly-future-state-arch-poc-dev', Key= inputFolder + self.fileConcatinator + self.fileName)
-            return file
+            self.file = s3.get_object(Bucket= 'lly-future-state-arch-poc-dev', Key= inputFolder + self.fileConcatinator + self.fileName)
+            return self.file
 
             #SingleLineComment
         return lines
@@ -322,7 +321,7 @@ class DataJsonFlatten:
             client.put_object(Body=output_string, Bucket='lly-future-state-arch-poc-dev', Key=  fileName)  
             #SingleLineComment
     
-    def runForOneLine(self, new_lines):
+    def runTransformation(self, new_lines):
         try: 
             #Loading Data to Memory as Json
             allData = json.loads(new_lines)  
@@ -360,12 +359,31 @@ class DataJsonFlatten:
             self.deleteFileIfExists(self.logFilePath)
             self.deleteFileIfExists(self.outputFilePath)  
 
-            file = self.getInputLines()
-            for i,line in enumerate(file['Body'].iter_lines()):
-                line1 = line.decode('utf-8')
-                self.log("Running for one line:")
-                print(str(i))
-                self.runForOneLine(line1) 
+            file = self.getFile()
+
+            if(self.read_line_byLine):
+                if(self.is_local_run):
+                    lines = self.fileVal.readlines()
+                    for line in lines:
+                        self.runTransformation(line)
+
+                else:
+                   for i,line in enumerate(file['Body'].iter_lines()):
+                    line1 = line.decode('utf-8')
+                    self.log("Running for one line:")
+                    print(str(i))
+                    self.runTransformation(line1)
+                    
+            else:
+                if(self.is_local_run):
+                    lines = self.fileVal.read()
+                    lines = "[" + lines + "]"
+                    self.runTransformation(lines)
+                else:
+                    lines = file['Body'].read().decode('UTF-8')  
+                    lines = "[" + lines + "]"
+                    self.runTransformation(lines)
+
 
         finally: 
             print("\n Getting Log File String")
