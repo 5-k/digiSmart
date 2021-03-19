@@ -261,8 +261,18 @@ class DataJsonFlatten:
 
 
     def getAddress(self, crossWalkPath, data):
-        addressList = data['attributes']['Address']
+        attributeData = None
+        if 'attributes' in data:
+            attributeData = data['attributes']
+        else:
+            return None
         
+        addressList = None
+        if 'Address' in attributeData:
+            addressList = attributeData['Address']
+        else:
+            return None
+                
         crossWalkType = crossWalkPath['type']
         crossWalkSourceTable = crossWalkPath['sourceTable']
         crossWalkValue = crossWalkPath['value']
@@ -270,17 +280,28 @@ class DataJsonFlatten:
         addressCombined = ''
 
         for address in addressList:
-            startObjectCrosswalks = address['startObjectCrosswalks']
-            for startObjectCrosswalk in startObjectCrosswalks:
-                addressCrossWalkType = startObjectCrosswalk['type']
-                addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
-                addressCrossWalkValue = startObjectCrosswalk['value']
-
-                if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
-                    if(None == addressCombined or len(addressCombined) == 0):
-                        addressCombined =  address['label']
-                    else: 
-                        addressCombined = addressCombined + self.multipleValueSeperator + address['label']
+            if 'startObjectCrosswalks' in address:
+                startObjectCrosswalks = address['startObjectCrosswalks']
+                for startObjectCrosswalk in startObjectCrosswalks:
+                    if 'type' in startObjectCrosswalk:
+                        addressCrossWalkType = startObjectCrosswalk['type']
+                    else:
+                        return None
+                    if 'sourceTable' in startObjectCrosswalk:
+                        addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
+                    else:
+                        return None
+                    if 'value' in startObjectCrosswalk:
+                        addressCrossWalkValue = startObjectCrosswalk['value']
+                    else:
+                        return None
+ 
+                    if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
+                        if(None == addressCombined or len(addressCombined) == 0):
+                            addressCombined =  address['label']
+                        else: 
+                            addressCombined = addressCombined + self.multipleValueSeperator + address['label']
+                
 
 
         return addressCombined
