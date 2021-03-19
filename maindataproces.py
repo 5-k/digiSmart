@@ -261,18 +261,8 @@ class DataJsonFlatten:
 
 
     def getAddress(self, crossWalkPath, data):
-        attributeData = None
-        if 'attributes' in data:
-            attributeData = data['attributes']
-        else:
-            return None
+        addressList = data['attributes']['Address']
         
-        addressList = None
-        if 'Address' in attributeData:
-            addressList = attributeData['Address']
-        else:
-            return None
-                
         crossWalkType = crossWalkPath['type']
         crossWalkSourceTable = crossWalkPath['sourceTable']
         crossWalkValue = crossWalkPath['value']
@@ -280,28 +270,17 @@ class DataJsonFlatten:
         addressCombined = ''
 
         for address in addressList:
-            if 'startObjectCrosswalks' in address:
-                startObjectCrosswalks = address['startObjectCrosswalks']
-                for startObjectCrosswalk in startObjectCrosswalks:
-                    if 'type' in startObjectCrosswalk:
-                        addressCrossWalkType = startObjectCrosswalk['type']
-                    else:
-                        return None
-                    if 'sourceTable' in startObjectCrosswalk:
-                        addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
-                    else:
-                        return None
-                    if 'value' in startObjectCrosswalk:
-                        addressCrossWalkValue = startObjectCrosswalk['value']
-                    else:
-                        return None
- 
-                    if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
-                        if(None == addressCombined or len(addressCombined) == 0):
-                            addressCombined =  address['label']
-                        else: 
-                            addressCombined = addressCombined + self.multipleValueSeperator + address['label']
-                
+            startObjectCrosswalks = address['startObjectCrosswalks']
+            for startObjectCrosswalk in startObjectCrosswalks:
+                addressCrossWalkType = startObjectCrosswalk['type']
+                addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
+                addressCrossWalkValue = startObjectCrosswalk['value']
+
+                if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
+                    if(None == addressCombined or len(addressCombined) == 0):
+                        addressCombined =  address['label']
+                    else: 
+                        addressCombined = addressCombined + self.multipleValueSeperator + address['label']
 
 
         return addressCombined
@@ -429,16 +408,10 @@ class DataJsonFlatten:
             self.s3.put_object(Body=output_string, Bucket=self.bucket_name, Key=  fileName)  
             #SingleLineComment
     
-    def appendToS3File(self):
-        outputFileExistingData = ''
-        try:
-            outputFileExistingFile = self.s3.get_object(Bucket= self.bucket_name, Key= self.outputFilePath)
-            outputFileExistingData = outputFileExistingFile['Body'].read().decode('UTF-8')
-        except botocore.exceptions.ClientError as e:
-            outputFileExistingData = ''
-            
-        self.final_output_string_for_s3 = outputFileExistingData + self.final_output_string_for_s3
-        self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
+    def appendToS3File(self, count):
+        timeStamp = self.getNowTimestampormatted() 
+        fileName = 'Data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count % 1000) + '.json'
+        self.writetoFile(self.final_output_string_for_s3, fileName ,  fileName)
         self.final_output_string_for_s3 = ''
 
     def runTransformation(self, new_lines):
@@ -484,13 +457,7 @@ class DataJsonFlatten:
             self.log('Is this Local Run = ' + str(self.is_local_run))
             self.log('Is Read Line By Line = ' + str(self.read_line_byLine)) 
 
-            file = self.getFile() 
-            s3 = None
-            if(self.is_local_run):
-                self.log('Completed Get File Local') 
-            else: 
-                self.log('Completed Get File S3') 
-                s3=boto3.client('s3')   
+            file = self.getFile()
 
             if(self.read_line_byLine):
                 if(self.is_local_run):
@@ -509,9 +476,8 @@ class DataJsonFlatten:
                         line1 = line.decode('utf-8')  
                         self.log('Iterating over line')
                         self.log(str(i))
-                        if(i % 100 == 0):
-                            
-                            self.appendToS3File()
+                        if(i % 1000 == 0): 
+                            self.appendToS3File(i)
                             '''
                             logFileExistingData = ''
                             try:
