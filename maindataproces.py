@@ -23,12 +23,19 @@ class SimpleJsonStruct:
     completeAttributeUri : str
     nestedLevel: int
     trimmedAttributeUri: str
-    
-    def __init__(self, key, completeAttributeUri, nestedLevel, trimmedAttributeUri):
+    crossWalkType: str
+    sourceTable: str
+    crosWalkValue: str
+
+    def __init__(self, key, completeAttributeUri, nestedLevel, trimmedAttributeUri, crossWalkType, sourceTable, crosWalkValue):
         self.key = key
         self.trimmedAttributeUri = trimmedAttributeUri
         self.completeAttributeUri = completeAttributeUri
         self.nestedLevel = nestedLevel
+        self.crossWalkType = crossWalkType
+        self.sourceTable = sourceTable
+        self.crosWalkValue = crosWalkValue
+
 
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
@@ -41,16 +48,37 @@ class DataJsonFlatten:
 
     #Required Fields in Output Json
     list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName",
-    "Gender","Source","OriginalSource", "Address", "Specialities"]
+    "Gender","Source","OriginalSource", "Specialities"]
     list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
     list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
     list_RequiredField_Custom=["EntityId"]
 
     #Env Run Variables
     log_data_to_file = True
-    is_local_run = False
     print_to_console = True 
-    read_line_byLine = True
+    is_local_run = True
+    
+    '''
+        Expected Data Format For Read Line By Line = True
+            [
+                {},
+                {},
+                {}
+            ]
+            The Square Brackets is missing - would still run
+            The comma at end if missing would still run
+            Each Line should have entire entity data
+        
+        Expected Data Format For Read Line By Line = False
+                {},{},{}
+                {},
+                {},
+                {}
+            
+            The Square Brackets should not come
+            Data can be at multiple Lines, Comma seperated
+    '''
+    read_line_byLine = False
 
     #Updated RunTime Variables
     fileName = "" 
@@ -66,6 +94,7 @@ class DataJsonFlatten:
     s3=None
     #static string
     fileConcatinator = '/' 
+    multipleValueSeperator = '|'
     bucket_name = 'lly-future-state-arch-poc-dev'
     output_type='json' 
 
@@ -102,7 +131,7 @@ class DataJsonFlatten:
 
         if(self.is_local_run):
             self.POC_INBOUND = 'H:/python'
-            self.fileName = 'BigFile.json'
+            self.fileName = 'sample.json'
             self.filePath = self.POC_INBOUND + self.fileConcatinator + self.fileName
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = self.POC_INBOUND + self.fileConcatinator + self.logFileName
@@ -112,7 +141,7 @@ class DataJsonFlatten:
             print("")
             #SingleLineComment
             POC_INBOUND = self.bucket_name + self.fileConcatinator + 'input_data'
-            self.fileName = 'BigFile.json' 
+            self.fileName = 'Source_file.json' 
             self.filePath =  POC_INBOUND + self.fileConcatinator +  self.fileName  
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = "logs" + self.fileConcatinator + self.logFileName
@@ -225,11 +254,36 @@ class DataJsonFlatten:
     def combineMultipleInfo(self, objValue, combinedValueForKey):
         if objValue and (len(objValue) > 0): 
             if(combinedValueForKey and len(combinedValueForKey) > 0 ):
-                combinedValueForKey = combinedValueForKey + "|" + str(objValue)
+                combinedValueForKey = combinedValueForKey + self.multipleValueSeperator + str(objValue)
             else:
                 combinedValueForKey = str(objValue)
         return combinedValueForKey
 
+
+    def getAddress(self, crossWalkPath, data):
+        addressList = data['attributes']['Address']
+        
+        crossWalkType = crossWalkPath['type']
+        crossWalkSourceTable = crossWalkPath['sourceTable']
+        crossWalkValue = crossWalkPath['value']
+
+        addressCombined = ''
+
+        for address in addressList:
+            startObjectCrosswalks = address['startObjectCrosswalks']
+            for startObjectCrosswalk in startObjectCrosswalks:
+                addressCrossWalkType = startObjectCrosswalk['type']
+                addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
+                addressCrossWalkValue = startObjectCrosswalk['value']
+
+                if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
+                    if(None == addressCombined or len(addressCombined) == 0):
+                        addressCombined =  address['label']
+                    else: 
+                        addressCombined = addressCombined + self.multipleValueSeperator + address['label']
+
+
+        return addressCombined
 
     def parseAndPopulateData(self, data, crossWalkPath):
         #This function takes in the entire entity data and crosswalk(from the same enitityData)
@@ -261,7 +315,7 @@ class DataJsonFlatten:
                         customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'lookupCode')
                         finalData['CountryCodeValue']= (str(customObjValue)) 
                     
-                    if(key == 'Address' or key == 'Specialities'):
+                    if(key == 'Specialities'):
                         customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'label')
                         combinedValueForKey = self.combineMultipleInfo(customObjValue, combinedValueForKey)
                         finalData[key]= combinedValueForKey
@@ -271,7 +325,7 @@ class DataJsonFlatten:
                     objValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'value')
                     if objValue and (len(objValue) > 0): 
                         if(combinedValueForKey and len(combinedValueForKey) > 0 ):
-                            combinedValueForKey = combinedValueForKey + "|" + str(objValue)
+                            combinedValueForKey = combinedValueForKey + self.multipleValueSeperator + str(objValue)
                         else:
                             combinedValueForKey = str(objValue)
                         flag=True 
@@ -298,6 +352,11 @@ class DataJsonFlatten:
         entityId = uri[entityIdStartIndex:]
         finalData['EntityId'] = entityId
 
+        addressValue = self.getAddress(crossWalkPath, data)
+        
+        if(addressValue and len(addressValue) > 0):
+            finalData['Address'] = addressValue
+        
         #Only If We have Data, add to Json
         if(finalData and finalJsonHasKeys):
             self.output_data.append(finalData)
@@ -319,7 +378,7 @@ class DataJsonFlatten:
                             attributeStartKeyIndex = attribute.index(key)
                             trimmedURI = attribute[attributeStartKeyIndex + len(key) :]
                             key = trimmedURI[0: trimmedURI.index('/')]
-                            obj = SimpleJsonStruct(key, attribute, self.getNestedLevel(trimmedURI), trimmedURI)     
+                            obj = SimpleJsonStruct(key, attribute, self.getNestedLevel(trimmedURI), trimmedURI, crossWalkPath['type'],crossWalkPath['sourceTable'], crossWalkPath['value'])
                             self.set_MyDictionary(self.dictionary_SimpleModels, key, obj)  
 
                         self.parseAndPopulateData(entityData, crossWalkPath) 
