@@ -21,14 +21,7 @@ import threading
 import functools
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
-
-def synchronized(function):
-    lock = threading.Lock()
-    @functools.wraps(function)
-    def wrapper(self, *args, **kwargs):
-        with lock:
-            return function(self, *args, **kwargs)
-    return wrapper
+ 
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -52,8 +45,8 @@ class SimpleJsonStruct:
 
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
-    #validCrossWalks= ["CODS","MDU"]
-    validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+    validCrossWalks= ["CODS","MDU"]
+    #validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     
     dictionary_SimpleModels = {} 
     output_data = [] 
@@ -70,11 +63,8 @@ class DataJsonFlatten:
     #Env Run Variables
     log_data_to_file = True
     print_to_console = True 
-    is_local_run = True
-    max_thread_count = 10000
-    SPLIT_COUNT = 8000
-    executor = ThreadPoolExecutor(max_thread_count)
-
+    is_local_run = False 
+    SPLIT_COUNT = 5000 
     '''
         Expected Data Format For Read Line By Line = True
             [
@@ -115,10 +105,7 @@ class DataJsonFlatten:
     multipleValueSeperator = '|'
     bucket_name = 'lly-future-state-arch-poc-dev'
     output_type='json' 
-
-    @synchronized
-    def appendSynchronized(self, source, data):
-        source.append(data)
+ 
 
     def runInParallel(self, *fns):
         proc = []
@@ -175,7 +162,7 @@ class DataJsonFlatten:
         timestampStr = self.getNowTimestampormatted() 
 
         if(self.is_local_run):
-            self.POC_INBOUND = 'C:/Users/pramishr/Desktop/data'
+            self.POC_INBOUND = 'H:/python'
             self.fileName = 'BigFile.json'
             self.filePath = self.POC_INBOUND + self.fileConcatinator + self.fileName
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
@@ -351,6 +338,7 @@ class DataJsonFlatten:
         crossWalkUri = crossWalkPath['uri']
         crossWalkValue = crossWalkPath['value']
         createDate = crossWalkPath['createDate']
+        updateDate = crossWalkPath['updateDate']
 
         finalData = {}
         flag = False
@@ -413,6 +401,9 @@ class DataJsonFlatten:
 
             elif dataVal == 'CreateDate':
                 finalData['CreateDate'] = createDate
+
+            elif dataVal == 'updateDate':
+                finalData['UpdateDate'] = updateDate
 
         #Custom Fields - Add EntityId
         uri = data['uri']
@@ -492,7 +483,7 @@ class DataJsonFlatten:
 
     def writeFailedTos3(self):
         timeStamp = self.getNowTimestampormatted() 
-        fileName = 'Failed/' + 'Failed_UnProcessed_' + timeStamp  + '.txt'
+        fileName = 'Failed/' + 'Failed_UnProcessed_' + timeStamp  + '.json'
         output_string = self.getOutputAsStringLineSeperated(self.failedRows, True)    
         self.writetoFile(output_string, fileName ,  fileName) 
         self.failedRows = []
@@ -579,8 +570,9 @@ class DataJsonFlatten:
                 
                 #Write LeftOver Lines
                 timeStamp = self.getNowTimestampormatted() 
-                logFileName = 'log_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.txt'
-                dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.json' 
+                logFileName = 'log_' + timeStamp +'_final_part' + '.txt'
+                dataFileName = 'Data_' + timeStamp +'_final_part' + '.json' 
+
                 if(self.is_local_run):
                     self.writetoFile(self.final_output_string_for_s3, dataFileName, dataFileName) 
                     self.writetoFile(self.final_log_string_for_s3,  logFileName, logFileName)
