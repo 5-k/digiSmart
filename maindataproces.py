@@ -39,8 +39,8 @@ class SimpleJsonStruct:
 
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
-    #validCrossWalks= ["CODS"]
-    validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+    validCrossWalks= ["CODS","MDU"]
+    #validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     
     dictionary_SimpleModels = {} 
     output_data = [] 
@@ -48,7 +48,7 @@ class DataJsonFlatten:
 
     #Required Fields in Output Json
     list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName",
-    "Gender","Source","OriginalSource", "Specialities"]
+    "Gender","Source","OriginalSource", "Specialities", "Identifiers"]
     list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
     list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
     list_RequiredField_Custom=["EntityId"]
@@ -56,7 +56,7 @@ class DataJsonFlatten:
     #Env Run Variables
     log_data_to_file = True
     print_to_console = True 
-    is_local_run = True
+    is_local_run = False
     
     '''
         Expected Data Format For Read Line By Line = True
@@ -78,7 +78,7 @@ class DataJsonFlatten:
             The Square Brackets should not come
             Data can be at multiple Lines, Comma seperated
     '''
-    read_line_byLine = False
+    read_line_byLine = True
 
     #Updated RunTime Variables
     fileName = "" 
@@ -141,12 +141,12 @@ class DataJsonFlatten:
             print("")
             #SingleLineComment
             POC_INBOUND = self.bucket_name + self.fileConcatinator + 'input_data'
-            self.fileName = 'Source_file.json' 
+            self.fileName = 'Source_file2.json.json' 
             self.filePath =  POC_INBOUND + self.fileConcatinator +  self.fileName  
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = "logs" + self.fileConcatinator + self.logFileName
-            self.outputFileName = "data_de_profiled_simplefied_json" + "." + self.output_type
-            self.outputFilePath = "Data" + self.fileConcatinator +  self.outputFileName
+            self.outputFileName = "cods_data_simplefied" + "." + self.output_type
+            self.outputFilePath = "MDU_data" + self.fileConcatinator +  self.outputFileName
             #SingleLineComment
 
     def getFile(self):
@@ -260,9 +260,20 @@ class DataJsonFlatten:
         return combinedValueForKey
 
 
+    
     def getAddress(self, crossWalkPath, data):
-        addressList = data['attributes']['Address']
+        attributeData = None
+        if 'attributes' in data:
+            attributeData = data['attributes']
+        else:
+            return None
         
+        addressList = None
+        if 'Address' in attributeData:
+            addressList = attributeData['Address']
+        else:
+            return None
+                
         crossWalkType = crossWalkPath['type']
         crossWalkSourceTable = crossWalkPath['sourceTable']
         crossWalkValue = crossWalkPath['value']
@@ -270,20 +281,24 @@ class DataJsonFlatten:
         addressCombined = ''
 
         for address in addressList:
-            startObjectCrosswalks = address['startObjectCrosswalks']
-            for startObjectCrosswalk in startObjectCrosswalks:
-                addressCrossWalkType = startObjectCrosswalk['type']
-                addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable']
-                addressCrossWalkValue = startObjectCrosswalk['value']
+            if 'startObjectCrosswalks' in address:
+                startObjectCrosswalks = address['startObjectCrosswalks']
+                for startObjectCrosswalk in startObjectCrosswalks:
+                    if 'type' in startObjectCrosswalk and 'sourceTable' in startObjectCrosswalk and 'value' in startObjectCrosswalk:
+                        addressCrossWalkType = startObjectCrosswalk['type'] 
+                        addressCrossWalkSourceTable = startObjectCrosswalk['sourceTable'] 
+                        addressCrossWalkValue = startObjectCrosswalk['value'] 
 
-                if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
-                    if(None == addressCombined or len(addressCombined) == 0):
-                        addressCombined =  address['label']
-                    else: 
-                        addressCombined = addressCombined + self.multipleValueSeperator + address['label']
+                        if(crossWalkType == addressCrossWalkType and  crossWalkSourceTable == addressCrossWalkSourceTable and crossWalkValue == addressCrossWalkValue):
+                            if(None == addressCombined or len(addressCombined) == 0):
+                                addressCombined =  address['label']
+                            else: 
+                                addressCombined = addressCombined + self.multipleValueSeperator + address['label']
+                
 
 
         return addressCombined
+
 
     def parseAndPopulateData(self, data, crossWalkPath):
         #This function takes in the entire entity data and crosswalk(from the same enitityData)
@@ -316,6 +331,13 @@ class DataJsonFlatten:
                         finalData['CountryCodeValue']= (str(customObjValue)) 
                     
                     if(key == 'Specialities'):
+                        customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'label')
+                        combinedValueForKey = self.combineMultipleInfo(customObjValue, combinedValueForKey)
+                        finalData[key]= combinedValueForKey
+                        finalJsonHasKeys = combinedValueForKey and len(combinedValueForKey) > 0
+                        continue
+                    
+                    if(key == 'Identifiers'):
                         customObjValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'label')
                         combinedValueForKey = self.combineMultipleInfo(customObjValue, combinedValueForKey)
                         finalData[key]= combinedValueForKey
@@ -410,7 +432,7 @@ class DataJsonFlatten:
     
     def appendToS3File(self, count):
         timeStamp = self.getNowTimestampormatted() 
-        fileName = 'Data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count % 1000) + '.json'
+        fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp + str(count % 1000) +'_part00' + '.json'
         self.writetoFile(self.final_output_string_for_s3, fileName ,  fileName)
         self.final_output_string_for_s3 = ''
 
@@ -519,7 +541,7 @@ class DataJsonFlatten:
             else:
                 self.appendToS3File()
                 #self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
-                #self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath)  
+                #self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath)
              
  
 if __name__ == "__main__":
