@@ -440,8 +440,7 @@ class DataJsonFlatten:
                     if "attributes" in crossWalkPath and bool(crossWalkPath["attributes"]):
                         
                         for attribute in crossWalkPath['attributes']:
-                            if('Address' in attribute):
-                                print(attribute)
+                            if('Address' in attribute): 
                             key = '/attributes/'
                             attributeStartKeyIndex = attribute.index(key)
                             trimmedURI = attribute[attributeStartKeyIndex + len(key) :]
@@ -481,12 +480,21 @@ class DataJsonFlatten:
         fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count / 1000)  + '.json'
         self.writetoFile(self.final_output_string_for_s3, fileName ,  fileName)
         self.final_output_string_for_s3 = ''
+        self.output_data = []
     
     def writeLogToS3(self, count):
         timeStamp = self.getNowTimestampormatted() 
         fileName = 'logs/' + 'log_' + timeStamp +'_part00'+ str(count / 1000)  + '.txt'
         self.writetoFile(self.final_log_string_for_s3, fileName ,  fileName)
         self.final_log_string_for_s3 = ''
+        self.logData = []
+
+    def writeFailedTos3(self):
+        timeStamp = self.getNowTimestampormatted() 
+        fileName = 'Failed/' + 'Failed_UnProcessed_' + timeStamp  + '.txt'
+        output_string = self.getOutputAsStringLineSeperated(self.failedRows, True)    
+        self.writetoFile(output_string, fileName ,  fileName) 
+        self.failedRows = []
 
     def runTransformation(self, new_lines):
         try: 
@@ -546,7 +554,7 @@ class DataJsonFlatten:
                             line = line[:line.rindex('}') + 1]
                             self.runTransformation(line)
                         
-                        if(countRow> 0 and countRow % 1000 == 0): 
+                        if(countRow> 0 and countRow % 8000 == 0): 
                             timeStamp = self.getNowTimestampormatted() 
                             logFileName = 'log_' + timeStamp +'_part00' + str(countRow / 1000) + '.txt'
                             dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / 1000) + '.json' 
@@ -564,7 +572,7 @@ class DataJsonFlatten:
                             line1 = line1[:line1.rindex('}') + 1]
                             self.runTransformation(line1)
 
-                        if(countRow> 0 and countRow % 1000 == 0): 
+                        if(countRow> 0 and countRow % 8000 == 0): 
                             self.writeDataToS3(countRow)
                             self.writeLogToS3(countRow)  
                        
@@ -592,8 +600,12 @@ class DataJsonFlatten:
         finally: 
             if(self.is_local_run):
                 print('End Of Program Local')
+                failedFiles = 'Failed_' + timeStamp + '.txt'
+                output_string = self.getOutputAsStringLineSeperated(self.failedRows, True)    
+                self.writetoFile(output_string, failedFiles, failedFiles) 
             else:
                 print('End Of Program S3')
+                self.writeFailedTos3()  
              
  
 if __name__ == "__main__":
