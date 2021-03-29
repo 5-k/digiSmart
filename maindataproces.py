@@ -258,7 +258,7 @@ class DataJsonFlatten:
                             else:
                                 dataObject= "," + dataObject + obj 
                 else:
-                    return obj
+                    return None
         return dataObject 
 
     def recursiveParser(self, keyModel, valueModels, currentKey, currentLevel, keyToFetch):
@@ -389,6 +389,7 @@ class DataJsonFlatten:
                         continue
 
                     objValue = self.recursiveParser( valueForKey, valueModels, key, valueForKey.nestedLevel, 'value')
+
                     if objValue and (len(objValue) > 0): 
                         if(combinedValueForKey and len(combinedValueForKey) > 0 ):
                             combinedValueForKey = combinedValueForKey + self.multipleValueSeperator + str(objValue)
