@@ -70,8 +70,9 @@ class DataJsonFlatten:
     #Env Run Variables
     log_data_to_file = True
     print_to_console = True 
-    is_local_run = False
+    is_local_run = True
     max_thread_count = 10000
+    SPLIT_COUNT = 8000
     executor = ThreadPoolExecutor(max_thread_count)
 
     '''
@@ -174,7 +175,7 @@ class DataJsonFlatten:
         timestampStr = self.getNowTimestampormatted() 
 
         if(self.is_local_run):
-            self.POC_INBOUND = 'H:/Python'
+            self.POC_INBOUND = 'C:/Users/pramishr/Desktop/data'
             self.fileName = 'BigFile.json'
             self.filePath = self.POC_INBOUND + self.fileConcatinator + self.fileName
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
@@ -440,8 +441,7 @@ class DataJsonFlatten:
                     
                     if "attributes" in crossWalkPath and bool(crossWalkPath["attributes"]):
                         
-                        for attribute in crossWalkPath['attributes']:
-                            if('Address' in attribute): 
+                        for attribute in crossWalkPath['attributes']: 
                             key = '/attributes/'
                             attributeStartKeyIndex = attribute.index(key)
                             trimmedURI = attribute[attributeStartKeyIndex + len(key) :]
@@ -478,14 +478,14 @@ class DataJsonFlatten:
     
     def writeDataToS3(self, count):
         timeStamp = self.getNowTimestampormatted() 
-        fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count / 1000)  + '.json'
+        fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count / self.SPLIT_COUNT)  + '.json'
         self.writetoFile(self.final_output_string_for_s3, fileName ,  fileName)
         self.final_output_string_for_s3 = ''
         self.output_data = []
     
     def writeLogToS3(self, count):
         timeStamp = self.getNowTimestampormatted() 
-        fileName = 'logs/' + 'log_' + timeStamp +'_part00'+ str(count / 1000)  + '.txt'
+        fileName = 'logs/' + 'log_' + timeStamp +'_part00'+ str(count / self.SPLIT_COUNT)  + '.txt'
         self.writetoFile(self.final_log_string_for_s3, fileName ,  fileName)
         self.final_log_string_for_s3 = ''
         self.logData = []
@@ -555,10 +555,10 @@ class DataJsonFlatten:
                             line = line[:line.rindex('}') + 1]
                             self.runTransformation(line)
                         
-                        if(countRow> 0 and countRow % 8000 == 0): 
+                        if(countRow> 0 and countRow % self.SPLIT_COUNT == 0): 
                             timeStamp = self.getNowTimestampormatted() 
-                            logFileName = 'log_' + timeStamp +'_part00' + str(countRow / 1000) + '.txt'
-                            dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / 1000) + '.json' 
+                            logFileName = 'log_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.txt'
+                            dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.json' 
                             self.writetoFile(self.final_output_string_for_s3, dataFileName, dataFileName) 
                             self.writetoFile(self.final_log_string_for_s3,  logFileName, logFileName)
 
@@ -573,10 +573,21 @@ class DataJsonFlatten:
                             line1 = line1[:line1.rindex('}') + 1]
                             self.runTransformation(line1)
 
-                        if(countRow> 0 and countRow % 8000 == 0): 
+                        if(countRow> 0 and countRow % self.SPLIT_COUNT == 0): 
                             self.writeDataToS3(countRow)
                             self.writeLogToS3(countRow)  
-                       
+                
+                #Write LeftOver Lines
+                timeStamp = self.getNowTimestampormatted() 
+                logFileName = 'log_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.txt'
+                dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / self.SPLIT_COUNT) + '.json' 
+                if(self.is_local_run):
+                    self.writetoFile(self.final_output_string_for_s3, dataFileName, dataFileName) 
+                    self.writetoFile(self.final_log_string_for_s3,  logFileName, logFileName)
+                else:
+                    self.writeDataToS3(countRow)
+                    self.writeLogToS3(countRow) 
+
             else:
                 if(self.is_local_run):
                     lines = self.fileVal.read()
@@ -598,7 +609,8 @@ class DataJsonFlatten:
             if(self.outLogfile and self.outLogfile is not None):
                 self.outLogfile.close()
 
-        finally: 
+        finally:
+            timeStamp = self.getNowTimestampormatted()  
             if(self.is_local_run):
                 print('End Of Program Local')
                 failedFiles = 'Failed_' + timeStamp + '.txt'
