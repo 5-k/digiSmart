@@ -15,7 +15,20 @@ import boto3
 import collections
 from datetime import datetime 
 import botocore
+import subprocess
+from multiprocessing import Process
+import threading
+import functools
+from concurrent.futures import ThreadPoolExecutor
+from time import sleep
 
+def synchronized(function):
+    lock = threading.Lock()
+    @functools.wraps(function)
+    def wrapper(self, *args, **kwargs):
+        with lock:
+            return function(self, *args, **kwargs)
+    return wrapper
 
 class SimpleJsonStruct:
     #Struct To Hold relevant Information for Each crosswalk in each Entity
@@ -39,25 +52,28 @@ class SimpleJsonStruct:
 
 class DataJsonFlatten:
     #There are the prefixes of valid sources we want to read from input json. 
-    validCrossWalks= ["CODS","MDU"]
-    #validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
+    #validCrossWalks= ["CODS","MDU"]
+    validCrossWalks=["CODS","CTLN","MDU","MCRM","EMBS","DATAVISION","CMS","PBMD"]
     
     dictionary_SimpleModels = {} 
     output_data = [] 
-    logData = []
+    failedRows = []
+    logData = [] 
 
     #Required Fields in Output Json
     list_RequiredField_For_Single_Nested_Data=["HCPUniqueId","ActiveFlag","EffectiveStartDate","EffectiveEndDate","CountryCode","Name","FirstName","MiddleName","LastName",
     "Gender","Source","OriginalSource", "Specialities", "Identifiers"]
     list_RequiredField_For_Double_Nested_Data=["RegulatoryAction","Email","Phone"]
-    list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate"]
+    list_RequiredField_From_CrossWalk = ["CrossWalkUri", "CrossWalkValue","CreateDate","updateDate"]
     list_RequiredField_Custom=["EntityId"]
 
     #Env Run Variables
     log_data_to_file = True
     print_to_console = True 
     is_local_run = False
-    
+    max_thread_count = 10000
+    executor = ThreadPoolExecutor(max_thread_count)
+
     '''
         Expected Data Format For Read Line By Line = True
             [
@@ -80,6 +96,7 @@ class DataJsonFlatten:
     '''
     read_line_byLine = True
 
+
     #Updated RunTime Variables
     fileName = "" 
     POC_INBOUND = ""
@@ -97,6 +114,33 @@ class DataJsonFlatten:
     multipleValueSeperator = '|'
     bucket_name = 'lly-future-state-arch-poc-dev'
     output_type='json' 
+
+    @synchronized
+    def appendSynchronized(self, source, data):
+        source.append(data)
+
+    def runInParallel(self, *fns):
+        proc = []
+        for fn in fns:
+            p = Process(target=fn)
+            p.start()
+            proc.append(p)
+        for p in proc:
+            p.join()
+        
+    def countRows(self, full_path, file):
+        """ Count number of lines in a file."""
+        nr_of_lines = 0
+
+        if(self.is_local_run): 
+            with open(full_path, encoding = "UTF-8") as f:
+                nr_of_lines = sum(1 for line in f)
+                 
+        else:
+            for i,line in enumerate(file['Body'].iter_lines()): 
+                nr_of_lines = nr_of_lines + 1
+
+        return nr_of_lines 
 
     def __init__(self):
         print("Information: Initialized Script")
@@ -130,8 +174,8 @@ class DataJsonFlatten:
         timestampStr = self.getNowTimestampormatted() 
 
         if(self.is_local_run):
-            self.POC_INBOUND = 'H:/python'
-            self.fileName = 'sample.json'
+            self.POC_INBOUND = 'H:/Python'
+            self.fileName = 'BigFile.json'
             self.filePath = self.POC_INBOUND + self.fileConcatinator + self.fileName
             self.logFileName = "logFile_" + timestampStr + "." + "txt"
             self.logFilePath = self.POC_INBOUND + self.fileConcatinator + self.logFileName
@@ -381,7 +425,9 @@ class DataJsonFlatten:
         
         #Only If We have Data, add to Json
         if(finalData and finalJsonHasKeys):
+            #self.appendSynchronized(self.output_data, finalData)
             self.output_data.append(finalData)
+            #return finalData
         
     def parseEntity(self, entityData):
         #For each element in EntityArray, We find the SourceTable , CrossWalks And Parses them to 
@@ -430,11 +476,17 @@ class DataJsonFlatten:
             self.s3.put_object(Body=output_string, Bucket=self.bucket_name, Key=  fileName)  
             #SingleLineComment
     
-    def appendToS3File(self, count):
+    def writeDataToS3(self, count):
         timeStamp = self.getNowTimestampormatted() 
-        fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp + str(count % 1000) +'_part00' + '.json'
+        fileName = 'CODS_data/' + 'Data_SingleNested' + timeStamp +'_part00' + str(count / 1000)  + '.json'
         self.writetoFile(self.final_output_string_for_s3, fileName ,  fileName)
         self.final_output_string_for_s3 = ''
+    
+    def writeLogToS3(self, count):
+        timeStamp = self.getNowTimestampormatted() 
+        fileName = 'logs/' + 'log_' + timeStamp +'_part00'+ str(count / 1000)  + '.txt'
+        self.writetoFile(self.final_log_string_for_s3, fileName ,  fileName)
+        self.final_log_string_for_s3 = ''
 
     def runTransformation(self, new_lines):
         try: 
@@ -449,22 +501,17 @@ class DataJsonFlatten:
                 self.parseEntity(allData)  
             else:
                 for entity in allData:  
-                    self.parseEntity(entity)   
-        
-            output_string = self.getOutputAsStringLineSeperated(self.output_data, True)  
+                    self.parseEntity(entity)  
+        except:
+            self.failedRows.append(new_lines)
+        finally:   
+            output_string = self.getOutputAsStringLineSeperated(self.output_data, True)    
+            self.final_output_string_for_s3 = self.final_output_string_for_s3 + output_string
+            self.output_data = []
             
-            if(self.is_local_run):
-                self.writetoFile(output_string, self.outputFilePath,  self.outputFilePath) 
-            else:
-                self.final_output_string_for_s3 = self.final_output_string_for_s3 + output_string 
-             
-        finally:  
-            log_output_string = self.getOutputAsStringLineSeperated(self.logData, False) 
-            if(self.is_local_run):
-                self.writetoFile(log_output_string,  self.logFilePath, self.logFilePath) 
-            else:
-                self.final_log_string_for_s3 = self.final_log_string_for_s3 + log_output_string 
-            
+            log_output_string = self.getOutputAsStringLineSeperated(self.logData, False)  
+            self.final_log_string_for_s3 = self.final_log_string_for_s3 + log_output_string
+            self.logData = []
 
     def main(self):
         try:
@@ -481,52 +528,59 @@ class DataJsonFlatten:
 
             file = self.getFile()
 
+            #rowCount = self.countRows(self.filePath, file) 
+            #print("rows")
+            #print(rowCount)
+            #exit(0)
+
+            countRow = 0
             if(self.read_line_byLine):
+
                 if(self.is_local_run):
-                    lines = self.fileVal.readlines()
-                    i = -1
-                    for line in lines: 
-                        i = i + 1
+                    lines = self.fileVal.readlines() 
+                    for line in lines:  
+                        countRow = countRow + 1
                         self.log('Iterating over line')
-                        self.log(str(i))
+                        self.log(str(countRow))
                         if(line and len(line) > 10):
                             line = line[:line.rindex('}') + 1]
                             self.runTransformation(line)
+                        
+                        if(countRow> 0 and countRow % 1000 == 0): 
+                            timeStamp = self.getNowTimestampormatted() 
+                            logFileName = 'log_' + timeStamp +'_part00' + str(countRow / 1000) + '.txt'
+                            dataFileName = 'Data_' + timeStamp +'_part00' + str(countRow / 1000) + '.json' 
+                            self.writetoFile(self.final_output_string_for_s3, dataFileName, dataFileName) 
+                            self.writetoFile(self.final_log_string_for_s3,  logFileName, logFileName)
 
                 else:
                    for i,line in enumerate(file['Body'].iter_lines()):
                         line1 = line.decode('utf-8')  
                         self.log('Iterating over line')
-                        self.log(str(i))
-                        if(i % 1000 == 0): 
-                            self.appendToS3File(i)
-                            '''
-                            logFileExistingData = ''
-                            try:
-                                logFileExistingFile = s3.get_object(Bucket= self.bucket_name, Key= self.logFilePath)
-                                logFileExistingData = logFileExistingFile['Body'].read().decode('UTF-8')  
-                            except botocore.exceptions.ClientError as e:
-                                logFileExistingData = '' 
-                            
-                            self.final_log_string_for_s3 = logFileExistingData + self.final_log_string_for_s3
-                            self.writetoFile(self.final_log_string_for_s3, self.logFilePath,  self.logFilePath) 
-                            '''
-                            self.final_log_string_for_s3 = '' 
-                         
-
+                        self.log(str(countRow))
+                        countRow = countRow + 1
+                        
                         if(line1 and len(line1) > 10):
                             line1 = line1[:line1.rindex('}') + 1]
                             self.runTransformation(line1)
-                    
+
+                        if(countRow> 0 and countRow % 1000 == 0): 
+                            self.writeDataToS3(countRow)
+                            self.writeLogToS3(countRow)  
+                       
             else:
                 if(self.is_local_run):
                     lines = self.fileVal.read()
                     lines = "[" + lines + "]"
                     self.runTransformation(lines)
+                    self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
+                    self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath)
                 else:
                     lines = file['Body'].read().decode('UTF-8')  
                     lines = "[" + lines + "]"
                     self.runTransformation(lines)
+                    self.writeDataToS3(countRow)
+                    self.writeLogToS3(countRow) 
 
             # Closing file 
             if(self.fileVal and self.fileVal is not None):
@@ -537,11 +591,9 @@ class DataJsonFlatten:
 
         finally: 
             if(self.is_local_run):
-                print('End Of Program')
+                print('End Of Program Local')
             else:
-                self.appendToS3File()
-                #self.writetoFile(self.final_output_string_for_s3, self.outputFilePath,  self.outputFilePath) 
-                #self.writetoFile(self.final_log_string_for_s3,  self.logFilePath, self.logFilePath)
+                print('End Of Program S3')
              
  
 if __name__ == "__main__":
