@@ -7,32 +7,190 @@ import boto3
 DATABASE = 'sampledb'
 TABLE = 'data'
 
+response1 = {
+    'statusCode': 200,
+    'headers': {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': '*'
+    },
+    'body': json.dumps({"status":101,"data":"search attribute is of other system, please provide correct attribute"})
+    }
+    
+response2 = {
+    'statusCode': 200,
+    'headers': {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': '*'
+    },
+    'body': json.dumps({"status":102,"data":"filter attribute is of other system, please provide correct attribute"})
+    }
+    
+response3 = {
+    'statusCode': 200,
+    'headers': {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': '*'
+    },
+    'body': json.dumps({"status":103,"data":"search and filter attribute is of other system, please provide correct attribute"})
+    }
+    
+response4 = {
+    'statusCode': 404,
+    'headers': {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': '*'
+    },
+    'body': json.dumps({"status":404,"data":"missing key 'user', please pass user value"})
+    }
+    
+response5 = {
+    'statusCode': 403,
+    'headers': {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': '*'
+    },
+    'body': json.dumps({"status":100,"data":"Access Denied"})
+    }
+
 # S3 constant
 S3_OUTPUT = 's3://lly-future-state-arch-poc-dev'
 S3_BUCKET = 'lly-future-state-arch-poc-dev'
-#output='s3://lly-future-state-arch-poc-dev/FutuureState_POC/Athena/'
 
 # number of retries
 RETRY_COUNT = 10
+old_value_col = ['hcpuniqueid']
+agg_value_col = ['email']
+max_value_col = ['firstname']
 
-# query constant
-COLUMN1 = 'Email'
-COLUMN2 = 'originalsource'
-COLUMN3 = 'entityid'
-
+col_list_cm = []
+col_list_c = []
+col_list_m = []
+cods_user = os.environ['cods_user']
+mdu_user = os.environ['mdu_user']
 
 def lambda_handler(event, context):
-        keyword1 = event['name1']
-        #keyword1 = event.get('queryStringParameters').get('original_source')
-        query = "SELECT * FROM %s.%s WHERE originalsource = '%s';" % (DATABASE, TABLE, keyword1)
-        print(keyword1)
-        print(query)
-    
-        # athena client
+    if event and event.get('queryStringParameters') and event.get('queryStringParameters').get('requiredValues'):
         client = boto3.client('athena')
-    
-        # Execution
-        response = client.start_query_execution(
+        print(event.get('queryStringParameters'))
+        column = event.get('queryStringParameters').get('requiredValues')
+        if "," in column:
+            columns = column.split(',')
+        else:
+            columns = [column]
+        if event.get('queryStringParameters').get('user'):
+            user_name = event.get('queryStringParameters').get('user')
+            resp_cm = client.get_table_metadata(
+                CatalogName='AwsDataCatalog',
+                DatabaseName='sampledb',
+                TableName='cods_mdu'
+            )
+            cols_cm = resp_cm['TableMetadata']['Columns']
+            for i in cols_cm:
+                col_list_cm.append(i['Name'])
+            col_list_cm.append('*')
+                
+            resp_c = client.get_table_metadata(
+                CatalogName='AwsDataCatalog',
+                DatabaseName='sampledb',
+                TableName='cods'
+            )
+            cols_c = resp_c['TableMetadata']['Columns']
+            for i in cols_c:
+                col_list_c.append(i['Name'])
+            col_list_c.append('*')
+                
+            resp_m = client.get_table_metadata(
+                CatalogName='AwsDataCatalog',
+                DatabaseName='sampledb',
+                TableName='mdu'
+            )
+            cols_m = resp_m['TableMetadata']['Columns']
+            for i in cols_m:
+                col_list_m.append(i['Name'])
+            col_list_m.append('*')
+            if event.get('queryStringParameters').get('filter'):
+                select_range = event.get('queryStringParameters').get('filter')
+                split_str = select_range.split("(")
+                operator = split_str[0]
+                col = split_str[1][0:-1]
+                col_name, col_value = col.split(",")[0], col.split(",")[1]
+                if user_name in mdu_user and user_name in cods_user:
+                    if col_name in col_list_cm:
+                        check =  all(item in col_list_cm for item in columns)
+                        if check is True:
+                            query = "SELECT %s FROM %s.cods_mdu_data where %s = '%s';" % (column, DATABASE, col_name, col_value)
+                        else:
+                            return response1
+                    else:
+                        check =  all(item in col_list_cm for item in columns)
+                        if check is True:
+                            return response2
+                        else:
+                            return response3
+                elif user_name in cods_user:
+                    if col_name in col_list_c:
+                        check =  all(item in col_list_c for item in columns)
+                        if check is True:
+                            query = "SELECT %s FROM %s.cods_data where %s = '%s';" % (column, DATABASE, col_name, col_value)
+                        else:
+                            return response1
+                    else:
+                        check =  all(item in col_list_c for item in columns)
+                        if check is True:
+                            return response2
+                        else:
+                            return response3
+                elif user_name in mdu_user:
+                    if col_name in col_list_m:
+                        check =  all(item in col_list_m for item in columns)
+                        if check is True:
+                            query = "SELECT %s FROM %s.mdu_data where %s = '%s';" % (column, DATABASE, col_name, col_value)
+                        else:
+                            return response1
+                    else:
+                        check =  all(item in col_list_m for item in columns)
+                        if check is True:
+                            return response2
+                        else:
+                            return response3
+                else:
+                    return response5
+            if not event.get('queryStringParameters').get('filter'):
+                if user_name in mdu_user and user_name in cods_user:
+                    check =  all(item in col_list_cm for item in columns)
+                    if check is True:
+                        query = "SELECT %s FROM %s.cods_mdu_data;" % (column, DATABASE)
+                    else:
+                        return response1
+                elif user_name in cods_user:
+                    check =  all(item in col_list_c for item in columns)
+                    if check is True:
+                        query = "SELECT %s FROM %s.cods_data;" % (column, DATABASE)
+                    else:
+                        return response1
+                elif user_name in mdu_user:
+                    check =  all(item in col_list_m for item in columns)
+                    if check is True:
+                        query = "SELECT %s FROM %s.mdu_data;" % (column, DATABASE)
+                    else:
+                        return response1
+                else:
+                    return response5
+        if not event.get('queryStringParameters').get('user'):
+            return response4
+        
+        print(query)
+        response_query = client.start_query_execution(
             QueryString=query,
             QueryExecutionContext={
                 'Database': DATABASE
@@ -43,7 +201,7 @@ def lambda_handler(event, context):
         )
     
         # get query execution id
-        query_execution_id = response['QueryExecutionId']
+        query_execution_id = response_query['QueryExecutionId']
         print(query_execution_id)
     
         # get execution status
@@ -63,22 +221,22 @@ def lambda_handler(event, context):
             else:
                 print("STATUS:" + query_execution_status)
                 time.sleep(i)
+        
         else:
             client.stop_query_execution(QueryExecutionId=query_execution_id)
             raise Exception('TIME OVER')
-        app =[]
+        
         # get query results
         result = client.get_query_results(QueryExecutionId=query_execution_id)
+        print(result)
+        
         allData =  result['ResultSet']['Rows']
         columnList = []
-        outputData = [] 
-
+        outputData = []
         if(allData and len(allData) > 1 ):
             columnHeaders = allData[0]['Data'] 
-
             for column in columnHeaders: 
                 columnList.append(column['VarCharValue'])
-
             i = 0
             for data in allData:
                 if i == 0:
@@ -93,33 +251,18 @@ def lambda_handler(event, context):
                         value = ''
                         if 'VarCharValue' in singleRow:
                             value = singleRow['VarCharValue']
-
                         if(key=='email' or key =='phone'):
                             values =  []
                             if value and len(value) > 0:
-                                values = value.split("|")
-
+                                values = value.split(",")
+                            
                             row[key] = values
                             j = j+ 1
                         else:
                             row[key] = str(value)
                             j = j+ 1
-
                     outputData.append(row)
-        return {
-            "statusCode": 200,
-            "body": json.dumps(outputData)
-        }
-
-        '''if len(result['ResultSet']['Rows']) >= 2:
-            for i in range(len(result['ResultSet']['Rows'])):
-                email = result['ResultSet']['Rows'][i]['Data'][i]#['VarCharValue']
-                app.append(email)
-            return app
-
-        else:
-            return None
-        
+        #return outputData
         response = {
                     'statusCode': 200,
                     'headers': {
@@ -128,5 +271,6 @@ def lambda_handler(event, context):
                         'Access-Control-Allow-Credentials': 'true',
                         'Access-Control-Allow-Headers': '*'
                     },
-                    'body': json.dumps({"status":"ok","data":[]})
-                }'''
+                    'body': json.dumps({"status":"ok","data":[outputData]})
+                }
+        return response
