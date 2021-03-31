@@ -1,7 +1,7 @@
 import os
 import time
 import json
-#import boto
+import boto3
 
 Database='sampledb'
 Table_CODS = 'cods_data'
@@ -13,7 +13,7 @@ S3_OUTPUT = 's3://lly-future-state-arch-poc-dev'
 S3_BUCKET = 'lly-future-state-arch-poc-dev'
 
 # number of retries
-RETRY_COUNT = 10
+RETRY_COUNT = 10000
 
 #User - Authorization - Later to be donne by OAuth2.0 Authentication
 cods_user = os.environ['cods_user']
@@ -43,7 +43,7 @@ def processData(allData):
                     if(key=='email' or key =='phone'):
                         values =  []
                         if value and len(value) > 0:
-                            values = value.split(",")
+                            values = value.split("|")
                         
                         row[key] = values
                         j = j+ 1
@@ -55,21 +55,35 @@ def processData(allData):
 
 def queryData(columnName, tableName, filterConditions): 
     client = boto3.client('athena')
-    queryStr = "select " + str(columnName) + " FROM " + tableName + " where " + filterConditions
+    print(columnName)
+    print(tableName)
+    print(filterConditions)
+    
+    queryStr = "select " + str(columnName) + " FROM " + str(Database) +"."+ str(tableName)
+    finalQuery = None
+    
+    if(filterConditions and len(filterConditions) >0):
+        finalQuery = queryStr + " where " + str(filterConditions) 
+        
+    print(queryStr)
+    print(finalQuery)
     response_query = client.start_query_execution(
-            QueryString=queryStr,
+            QueryString=finalQuery,
             QueryExecutionContext={
-                'Database': DATABASE
+                'Database': Database
             },
             ResultConfiguration={
                 'OutputLocation': S3_OUTPUT,
             }
         )
+    
+    print('start')
     query_execution_id = response_query['QueryExecutionId']
-
+    print(query_execution_id)
+    
     # get execution status
     for i in range(1, 1 + RETRY_COUNT):
-
+        print(i)
         # get query execution
         query_status = client.get_query_execution(QueryExecutionId=query_execution_id)
         query_execution_status = query_status['QueryExecution']['Status']['State']
@@ -83,7 +97,7 @@ def queryData(columnName, tableName, filterConditions):
 
         else:
             print("STATUS:" + query_execution_status)
-            time.sleep(i)
+            
     result = client.get_query_results(QueryExecutionId=query_execution_id)
     allData =  result['ResultSet']['Rows']   
     return allData
@@ -113,18 +127,15 @@ def lambda_handler(event, context):
                 requiredColumnsStr = event.get('queryStringParameters').get('requiredColumns')
 
             filters = None
-            res = {}
             filterColumns =None
 
             if 'body' in event:
                 filterColumns = json.loads(event['body']) 
-                for key in filterColumns.keys():  
-                    res[key] = filterColumns[key]
+                for key in filterColumns.keys(): 
                     if(filters and len(filters) > 0):
                         filters = filters + " and " + str(key) +"=" + "'" + str(filterColumns[key]) + "'"
                     else:
                         filters = str(key) +"=" + "'" + str(filterColumns[key]) + "'"
-                res['final'] = filters
             
             filterTable = None
             if user in mdu_user and user in cods_user:
@@ -135,7 +146,7 @@ def lambda_handler(event, context):
                 filterTable = Table_CODS
             
             if(filterTable):
-                allData = queryData(requiredColumnsStr, filterTable,  filterColumns)
+                allData = queryData(requiredColumnsStr, filterTable,  filters)
                 processedData = processData(allData)
                 responseBody= processedData
                 status = 200
@@ -155,9 +166,3 @@ def lambda_handler(event, context):
         }
     
     return response
-
-
-    
-
-
- 
